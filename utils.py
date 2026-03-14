@@ -425,13 +425,13 @@ def visualize_predictions(model : torch.nn.Module, dataSet : Dataset,
 
         # groundtruth label image
         label_class = gt.cpu().detach().numpy()
-        axes[i, 1].imshow(id_to_color[label_class])
+        axes[i, 1].imshow(id_to_color[label_class]/28)
         axes[i, 1].set_title("Groudtruth Label")
 
         # predicted label image
         y_pred = torch.argmax(model(inputImage.unsqueeze(0)), dim=1).squeeze(0)
         label_class_predicted = y_pred.cpu().detach().numpy()    
-        axes[i, 2].imshow(id_to_color[label_class_predicted])
+        axes[i, 2].imshow(id_to_color[label_class_predicted]/28)
         axes[i, 2].set_title("Predicted Label")
 
     #plt.show()

@@ -47,7 +47,7 @@ train_dataloader, val_dataloader, test_dataloader = get_dataloaders(train_set, v
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
 
 # MODEL HYPERPARAMETERS
-N_EPOCHS = 12
+N_EPOCHS = 30
 NUM_CLASSES = 28
 MAX_LR = 1e-3
 MODEL_NAME = f'segformer_{targetHeight}_{targetWidth}_CE_loss'
