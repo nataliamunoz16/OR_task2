@@ -157,9 +157,9 @@ def get_datasets(images, labels):
 ###################################
 
 def get_dataloaders(train_set, val_set, test_set):
-    train_dataloader = DataLoader(train_set, batch_size=8,drop_last=True)
-    val_dataloader   = DataLoader(val_set, batch_size=8)
-    test_dataloader  = DataLoader(test_set, batch_size=8)
+    train_dataloader = DataLoader(train_set, batch_size=5,drop_last=True)
+    val_dataloader   = DataLoader(val_set, batch_size=5)
+    test_dataloader  = DataLoader(test_set, batch_size=5)
     return train_dataloader, val_dataloader, test_dataloader    
 
 
@@ -334,7 +334,7 @@ def train_validate_model(model, num_epochs, model_name, criterion, optimizer,
                          output_path = '.'):
     # initialize placeholders for running values
     results = []    
-    min_val_loss = np.Inf
+    min_val_loss = np.inf
     len_train_loader = len(dataloader_train)
 
     # move model to device
@@ -434,7 +434,9 @@ def visualize_predictions(model : torch.nn.Module, dataSet : Dataset,
         axes[i, 2].imshow(id_to_color[label_class_predicted])
         axes[i, 2].set_title("Predicted Label")
 
-    plt.show()
+    #plt.show()
+    plt.savefig("predicted.png")
+    plt.close()
 
 
 
