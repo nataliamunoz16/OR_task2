@@ -69,12 +69,42 @@ scheduler = OneCycleLR(optimizer, max_lr= MAX_LR, epochs = N_EPOCHS,steps_per_ep
 _ = train_validate_model(model, N_EPOCHS, MODEL_NAME, criterion, optimizer, 
                          device, train_dataloader, val_dataloader, meanIoU, 'meanIoU',
                          NUM_CLASSES, lr_scheduler = scheduler, output_path = config.ROOT)
-
 model.load_state_dict(torch.load(f'{MODEL_NAME}.pt', map_location=device))
 _, test_metric = evaluate_model(model, test_dataloader, criterion, meanIoU, NUM_CLASSES, device)
 print(f"\nModel has {test_metric} mean IoU in test set")
 
 id_to_color = np.array([[i,i,i] for i in range(29)], dtype=np.uint8)
+id_to_color = np.array([
+    [0,0,0],
+    [255,0,0],
+    [0,255,0],
+    [0,0,255],
+    [255,255,0],
+    [255,0,255],
+    [0,255,255],
+    [128,0,0],
+    [0,128,0],
+    [0,0,128],
+    [128,128,0],
+    [128,0,128],
+    [0,128,128],
+    [192,64,0],
+    [64,192,0],
+    [0,64,192],
+    [192,0,64],
+    [64,0,192],
+    [0,192,64],
+    [255,128,0],
+    [255,0,128],
+    [128,255,0],
+    [0,255,128],
+    [128,0,255],
+    [0,128,255],
+    [255,128,128],
+    [128,255,128],
+    [128,128,255],
+    [200,200,200]
+], dtype=np.uint8)
 from utils import visualize_predictions
 num_test_samples = 10
 _, axes = plt.subplots(num_test_samples, 3, figsize=(3*6, num_test_samples * 4))
