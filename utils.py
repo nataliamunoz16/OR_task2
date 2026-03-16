@@ -334,7 +334,7 @@ def train_validate_model(model, num_epochs, model_name, criterion, optimizer,
                          output_path = '.'):
     # initialize placeholders for running values
     results = []    
-    min_val_loss = np.Inf
+    min_val_loss = np.inf
     len_train_loader = len(dataloader_train)
 
     # move model to device

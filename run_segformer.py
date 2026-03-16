@@ -19,7 +19,7 @@ from torch.utils.data import random_split
 import torchvision.transforms as T
 from pathlib import Path
 
-#dataset loader
+# dataset loader
 targetWidth = 512
 targetHeight = 768
 transform = T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])])
@@ -29,8 +29,6 @@ val_size = int(0.5 * len(val_test_set))
 test_size = len(val_test_set) - val_size
 val_set, test_set = random_split(val_test_set, [val_size, test_size])
 train_dataloader, val_dataloader, test_dataloader = get_dataloaders(train_set, val_set, test_set)
-
-
 
 rgb_image, label = train_set[np.random.choice(len(train_set))]
 rgb_image = inverse_transform(rgb_image).permute(1, 2, 0).cpu().detach().numpy()
