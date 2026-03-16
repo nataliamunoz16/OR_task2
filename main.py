@@ -38,7 +38,7 @@ def main():
 
     transform = T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])])
     #train_set = FashionDataset(config.TRAIN_IMG, config.TRAIN_MASK, targetHeight, targetWidth, transform) # no hem pogut descarregar el file
-    train_set = FashionDataset(config.TEST_IMG, config.TEST_MASK, targetHeight, targetWidth, transform) # de moment mirem amb el test, nomes per provar q el codi funciona
+    train_set = FashionDataset(config.TRAIN_IMG, config.TRAIN_MASK, targetHeight, targetWidth, transform) 
     val_test_set = FashionDataset(config.TEST_IMG, config.TEST_MASK, targetHeight, targetWidth, transform)
     val_size = int(0.5 * len(val_test_set))
     test_size = len(val_test_set) - val_size
@@ -74,7 +74,43 @@ def main():
     model.load_state_dict(torch.load(f'{MODEL_NAME}.pt', map_location=device))
     _, test_metric = evaluate_model(model, test_dataloader, criterion, meanIoU, NUM_CLASSES, device)
     print(f"\nModel has {test_metric} mean IoU in test set")
-
+    id_to_color = np.array([[i,i,i] for i in range(29)], dtype=np.uint8)
+    id_to_color = np.array([
+        [0,0,0],
+        [255,0,0],
+        [0,255,0],
+        [0,0,255],
+        [255,255,0],
+        [255,0,255],
+        [0,255,255],
+        [128,0,0],
+        [0,128,0],
+        [0,0,128],
+        [128,128,0],
+        [128,0,128],
+        [0,128,128],
+        [192,64,0],
+        [64,192,0],
+        [0,64,192],
+        [192,0,64],
+        [64,0,192],
+        [0,192,64],
+        [255,128,0],
+        [255,0,128],
+        [128,255,0],
+        [0,255,128],
+        [128,0,255],
+        [0,128,255],
+        [255,128,128],
+        [128,255,128],
+        [128,128,255],
+        [200,200,200]
+    ], dtype=np.uint8)
+    from utils import visualize_predictions
+    num_test_samples = 10
+    _, axes = plt.subplots(num_test_samples, 3, figsize=(3*6, num_test_samples * 4))
+    visualize_predictions(model, test_set, axes, device, numTestSamples=num_test_samples, 
+                        id_to_color = id_to_color)
 
 if __name__ == '__main__':
     main()

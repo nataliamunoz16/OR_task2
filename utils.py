@@ -434,7 +434,9 @@ def visualize_predictions(model : torch.nn.Module, dataSet : Dataset,
         axes[i, 2].imshow(id_to_color[label_class_predicted])
         axes[i, 2].set_title("Predicted Label")
 
-    plt.show()
+    #plt.show()
+    plt.savefig("predicted.png")
+    plt.close()
 
 
 
