@@ -1,81 +1,76 @@
+import os
+import json
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
-import os
 import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
-
-from einops import rearrange
-from timm.models.layers import drop_path, trunc_normal_
-from utils import get_dataloaders, inverse_transform
 from dataset import FashionDataset
 import config
 from torch.utils.data import random_split
 import torchvision.transforms as T
-
+from Segformer import segformer_mit_b3
 from deeplabv3plus import deeplabv3plus
-from utils import *
+from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions)
+import matplotlib.pyplot as plt
+import random
+import time
+
+FULL_CLASSES = ('shirt, blouse','top, t-shirt, sweatshirt','sweater','cardigan','jacket','vest','pants','shorts','skirt','coat','dress','jumpsuit','cape','glasses','hat','headband, head covering, hair accessory','tie','glove','watch','belt','leg warmer','tights, stockings','sock','shoe','bag, wallet','scarf','umbrella','hood','collar','lapel','epaulette','sleeve','pocket','neckline','buckle','zipper','applique','bead','bow','flower','fringe','ribbon','rivet','ruffle','sequin','tassel')
+MAIN_CLASSES = FULL_CLASSES[:27]
+NUM_CLASSES = len(MAIN_CLASSES) + 1 #+1 for background
+
+def set_seed(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
-def main():
-    FULL_CLASSES = ('shirt, blouse','top, t-shirt, sweatshirt','sweater','cardigan','jacket','vest','pants','shorts','skirt','coat','dress','jumpsuit','cape','glasses','hat','headband, head covering, hair accessory','tie','glove','watch','belt','leg warmer','tights, stockings','sock','shoe','bag, wallet','scarf','umbrella','hood','collar','lapel','epaulette','sleeve','pocket','neckline','buckle','zipper','applique','bead','bow','flower','fringe','ribbon','rivet','ruffle','sequin','tassel')
-    MAIN_CLASSES = FULL_CLASSES[:27]
-    num_classes = len(MAIN_CLASSES) + 1
-
-    # dataset loader
-    targetWidth = 512
-    targetHeight = 768
-
-    N_EPOCHS = 30
-    NUM_CLASSES = 28
-    MAX_LR = 1e-3
-    model_name = ['maskRCNN', 'deeplabv3+', 'segformer'][1]
-    MODEL_NAME = f'{model_name}_{targetHeight}_{targetWidth}_CE_loss'
-
-    ignore_index = 255
-
-    transform = T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])])
-    #train_set = FashionDataset(config.TRAIN_IMG, config.TRAIN_MASK, targetHeight, targetWidth, transform) # no hem pogut descarregar el file
-    train_set = FashionDataset(config.TRAIN_IMG, config.TRAIN_MASK, targetHeight, targetWidth, transform) 
-    val_test_set = FashionDataset(config.TEST_IMG, config.TEST_MASK, targetHeight, targetWidth, transform)
-    val_size = int(0.5 * len(val_test_set))
-    test_size = len(val_test_set) - val_size
-    val_set, test_set = random_split(val_test_set, [val_size, test_size])
-    train_dataloader, val_dataloader, test_dataloader = get_dataloaders(train_set, val_set, test_set)
-
-
-    if model_name == 'maskRCNN':
-        pass
-    elif model_name == 'deeplabv3+':
-        model = deeplabv3plus(num_classes)
-    elif model_name == 'segformer':
-        pass
-    
+def get_device():
     if torch.backends.mps.is_available():
-        device = torch.device("mps")
-    elif torch.cuda.is_available():
-        device = torch.device("cuda")
+        return torch.device("mps")
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    return torch.device("cpu")
+
+def build_transforms():
+    return T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])])
+
+def build_datasets(target_height, target_width, transform):
+    train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform)
+    test_set = FashionDataset(config.TEST_IMG,config.TEST_MASK,target_height,target_width,transform)
+
+    val_size = len(test_set)
+    if val_size > len(train_set_full):
+        raise ValueError(f"Validation size ({val_size}) is larger than train set ({len(train_set_full)}).")
+
+    train_size = len(train_set_full) - val_size
+    generator = torch.Generator().manual_seed(42)
+    train_set, val_set = random_split(train_set_full,[train_size, val_size],generator=generator)
+    return train_set, val_set, test_set
+
+def build_model(model_name: str, num_classes: int, device: torch.device, pretrained: bool = True):
+    if model_name == "deeplabv3+":
+        model = deeplabv3plus(num_classes)
+    elif model_name == "segformer":
+        model = segformer_mit_b3(in_channels=3, num_classes=num_classes)
+        if pretrained:
+            weights_path = "segformers/segformer_mit_b3_imagenet_weights.pt"
+            if os.path.exists(weights_path):
+                state_dict = torch.load(weights_path, map_location=device)
+                model.backbone.load_state_dict(state_dict)
+            else:
+                print(f"Warning: pretrained weights not found at {weights_path}")
+    elif model_name == "maskRCNN":
+        raise NotImplementedError("maskRCNN branch is not implemented yet.")
     else:
-        device = torch.device("cpu")
-    print(f"Using device: {device}")
+        raise ValueError(f"Unknown model_name: {model_name}")
+    return model.to(device)
 
-
-    criterion = nn.CrossEntropyLoss(ignore_index=ignore_index)
-    # create optimizer, lr_scheduler and pass to training function
-    optimizer = optim.Adam(model.parameters(), lr=MAX_LR)
-    scheduler = OneCycleLR(optimizer, max_lr= MAX_LR, epochs = N_EPOCHS,steps_per_epoch = len(train_dataloader), 
-                        pct_start=0.3, div_factor=10, anneal_strategy='cos')
-    
-    _ = train_validate_model(model, N_EPOCHS, MODEL_NAME, criterion, optimizer, 
-                         device, train_dataloader, val_dataloader, meanIoU, 'meanIoU',
-                         NUM_CLASSES, lr_scheduler = scheduler, output_path = config.ROOT)
-    model.load_state_dict(torch.load(f'{MODEL_NAME}.pt', map_location=device))
-    _, test_metric = evaluate_model(model, test_dataloader, criterion, meanIoU, NUM_CLASSES, device)
-    print(f"\nModel has {test_metric} mean IoU in test set")
-    id_to_color = np.array([[i,i,i] for i in range(29)], dtype=np.uint8)
-    id_to_color = np.array([
+def get_id_to_color():
+    return np.array([
         [0,0,0],
         [255,0,0],
         [0,255,0],
@@ -106,11 +101,93 @@ def main():
         [128,128,255],
         [200,200,200]
     ], dtype=np.uint8)
-    from utils import visualize_predictions
+
+def main():
+    set_seed(42)
+
+    target_width = 384
+    target_height = 384
+    n_epochs = 20
+    max_lr = 1e-3
+    batch_size = 8
+    pretrained = True
+    data_augmentation = False
+    model_name = "segformer"
+    model_file = f"{model_name}_{target_height}_{target_width}_{max_lr}_{batch_size}"
+    suffixes = []
+    if pretrained:
+        suffixes.append("pretrained")
+    if data_augmentation:
+        suffixes.append("data_aug")
+    if suffixes:
+        model_file += "_" + "_".join(suffixes)
+
+    device = get_device()
+    print(f"Using device: {device}")
+
+    transform = build_transforms()
+    train_set, val_set, test_set = build_datasets(target_height,target_width,transform)
+    train_loader, val_loader, test_loader = get_dataloaders(train_set, val_set, test_set, batch_size=batch_size)
+
+    model = build_model(model_name, NUM_CLASSES, device, pretrained=pretrained)
+
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=max_lr)
+    scheduler = OneCycleLR(optimizer, max_lr= max_lr, epochs = n_epochs,steps_per_epoch = len(train_loader), pct_start=0.3, div_factor=10, anneal_strategy='cos')
+    results = {}
+    start_train_val = time.time()
+    _ = train_validate_model(model, n_epochs, model_name, criterion, optimizer, 
+                         device, train_loader, val_loader,NUM_CLASSES, lr_scheduler = scheduler, output_path = config.MODELS, model_name_save=model_file)
+    results['train_time'] = start_train_val -time.time()
+    model_path_best_loss = os.path.join(config.MODELS, f"{model_file}_best_loss.pt")
+    if not os.path.exists(model_path_best_loss):
+        raise FileNotFoundError(f"Checkpoint not found for best loss: {model_path_best_loss}")
+    model.load_state_dict(torch.load(model_path_best_loss, map_location=device))
+    test_metrics = evaluate_model(model, test_loader, criterion, NUM_CLASSES, device)
+    print(f"\nModel has {test_metrics['mDice']} mean Dice in test set")
+    result_best_loss = {
+            "mIoU": float(test_metrics["mIoU"]),
+            "mDice": float(test_metrics["mDice"]),
+            "mDice_no_bg": float(test_metrics["mDice_no_bg"]),
+            "accuracy": float(test_metrics["accuracy"]),
+            "mean_acc": float(test_metrics["mean_acc"]),
+            "mean_acc_no_bg": float(test_metrics["mean_acc_no_bg"]),
+            "dice_per_class": test_metrics["dice_per_class"].tolist(),
+            "accuracy_per_class": test_metrics["accuracy_per_class"].tolist(),
+            "iou_per_class": test_metrics["iou_per_class"].tolist(),
+        }
+    results['best loss model'] = result_best_loss
+
+
+    model_path_mdice = os.path.join(config.MODELS, f"{model_file}_best_mDice.pt")
+    if not os.path.exists(model_path_mdice):
+        raise FileNotFoundError(f"Checkpoint not found for mDice: {model_path_mdice}")
+    model.load_state_dict(torch.load(model_path_mdice, map_location=device))
+    test_metrics = evaluate_model(model, test_loader, criterion, NUM_CLASSES, device)
+    print(f"\nModel has {test_metrics['mDice']} best mean Dice in test set")
+    result_mdice = {
+            "mIoU": float(test_metrics["mIoU"]),
+            "mDice": float(test_metrics["mDice"]),
+            "mDice_no_bg": float(test_metrics["mDice_no_bg"]),
+            "accuracy": float(test_metrics["accuracy"]),
+            "mean_acc": float(test_metrics["mean_acc"]),
+            "mean_acc_no_bg": float(test_metrics["mean_acc_no_bg"]),
+            "dice_per_class": test_metrics["dice_per_class"].tolist(),
+            "accuracy_per_class": test_metrics["accuracy_per_class"].tolist(),
+            "iou_per_class": test_metrics["iou_per_class"].tolist(),
+        }
+    results['mDice model'] = result_mdice
+    metrics_json_path = os.path.join(config.RESULTS, f"{model_file}_test_metrics.json")
+    with open(metrics_json_path, "w") as f:
+        json.dump(results, f, indent=4)
+
+
+    #id_to_color = np.array([[i,i,i] for i in range(29)], dtype=np.uint8)
+    id_to_color = get_id_to_color()
     num_test_samples = 10
     _, axes = plt.subplots(num_test_samples, 3, figsize=(3*6, num_test_samples * 4))
     visualize_predictions(model, test_set, axes, device, numTestSamples=num_test_samples, 
-                        id_to_color = id_to_color)
+                        id_to_color = id_to_color, model_name_save = model_file)
 
 if __name__ == '__main__':
     main()
