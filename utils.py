@@ -348,10 +348,12 @@ def evaluate_model(model, dataloader, criterion, num_classes, device):
             # flatten
             preds= preds.view(-1)
             labels= labels.view(-1)
-
+            
+            idx = labels * num_classes + preds
+            conf_mat += torch.bincount(idx,minlength=num_classes * num_classes).reshape(num_classes, num_classes)
             #update confusion matrix
-            for t, p in zip(labels, preds):
-                conf_mat[t.long(), p.long()] += 1
+            #for t, p in zip(labels, preds):
+                #conf_mat[t.long(), p.long()] += 1
 
     conf_mat= conf_mat.float()
     TP= torch.diag(conf_mat)
