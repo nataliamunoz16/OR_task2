@@ -98,8 +98,7 @@ def get_id_to_color():
         [0,128,255],
         [255,128,128],
         [128,255,128],
-        [128,128,255],
-        [200,200,200]
+        [128,128,255]
     ], dtype=np.uint8)
 
 def main():
@@ -109,7 +108,7 @@ def main():
     target_height = 384
     n_epochs = 20
     max_lr = 1e-3
-    batch_size = 8
+    batch_size = 5
     pretrained = True
     data_augmentation = False
     model_name = "segformer"
@@ -138,7 +137,7 @@ def main():
     start_train_val = time.time()
     _ = train_validate_model(model, n_epochs, model_name, criterion, optimizer, 
                          device, train_loader, val_loader,NUM_CLASSES, lr_scheduler = scheduler, output_path = config.MODELS, model_name_save=model_file)
-    results['train_time'] = start_train_val -time.time()
+    results['train_time'] = time.time() - start_train_val
     model_path_best_loss = os.path.join(config.MODELS, f"{model_file}_best_loss.pt")
     if not os.path.exists(model_path_best_loss):
         raise FileNotFoundError(f"Checkpoint not found for best loss: {model_path_best_loss}")
@@ -182,7 +181,7 @@ def main():
         json.dump(results, f, indent=4)
 
 
-    #id_to_color = np.array([[i,i,i] for i in range(29)], dtype=np.uint8)
+    #id_to_color = np.array([[i,i,i] for i in range(28)], dtype=np.uint8)
     id_to_color = get_id_to_color()
     num_test_samples = 10
     _, axes = plt.subplots(num_test_samples, 3, figsize=(3*6, num_test_samples * 4))

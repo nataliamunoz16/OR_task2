@@ -30,14 +30,14 @@ import segmentation_models_pytorch as smp
 # Convert to torch tensor and normalize images using Imagenet values
 preprocess = transforms.Compose([
                     transforms.ToTensor(),
-                    transforms.Normalize(mean=(0.485, 0.56, 0.406), std=(0.229, 0.224, 0.225))
+                    transforms.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
                 ])
 
 # when using torch datasets we defined earlier, the output image
 # is normalized. So we're defining an inverse transformation to 
 # transform to normal RGB format
 inverse_transform = transforms.Compose([
-        transforms.Normalize((-0.485/0.229, -0.456/0.224, -0.406/0.225), (1/0.229, 1/0.224, 1/0.225))
+        transforms.Normalize(mean=(-0.485/0.229, -0.456/0.224, -0.406/0.225), std=(1/0.229, 1/0.224, 1/0.225))
     ])
 
 
@@ -159,7 +159,7 @@ def get_datasets(images, labels):
 ###################################
 
 def get_dataloaders(train_set, val_set, test_set, batch_size=8):
-    train_dataloader = DataLoader(train_set, batch_size=batch_size,drop_last=True)
+    train_dataloader = DataLoader(train_set, batch_size=batch_size, shuffle=True,drop_last=True)
     val_dataloader   = DataLoader(val_set, batch_size=batch_size)
     test_dataloader  = DataLoader(test_set, batch_size=batch_size)
     return train_dataloader, val_dataloader, test_dataloader    
@@ -330,7 +330,7 @@ def evaluate_model(model, dataloader, criterion, num_classes, device):
     total_loss=0.0
 
     #confusion matrix
-    conf_mat=torch.zeros((num_classes, num_classes), dtype=torch.int64)
+    conf_mat=torch.zeros((num_classes, num_classes), dtype=torch.int64, device = device)
 
     with torch.no_grad():
         for inputs, labels in tqdm(dataloader, total=len(dataloader)):
@@ -531,8 +531,8 @@ def visualize_predictions(model : torch.nn.Module, dataSet : Dataset,
         axes[i, 2].set_title("Predicted Label")
 
     #plt.show()
-    plt.savefig(os.path.join(config.RESULTS, f"{model_name_save}_predicted.png"))
     plt.tight_layout()
+    plt.savefig(os.path.join(config.RESULTS, f"{model_name_save}_predicted.png"))
     plt.close()
 
 
