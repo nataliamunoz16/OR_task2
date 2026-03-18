@@ -19,5 +19,6 @@ fashionpedia/
 *.h5
 *.onnx
 *.zip
+*.deb
 
 instances_attributes_train2020.json
