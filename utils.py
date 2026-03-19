@@ -388,7 +388,7 @@ def evaluate_model(model, dataloader, criterion, num_classes, device):
 
 def train_validate_model(model, num_epochs, model_name, criterion, optimizer, 
                          device, dataloader_train, dataloader_valid, num_classes, lr_scheduler = None,
-                         output_path = '.', model_name_save=None,early_stopping_patience = 5, min_delta=1e-5):
+                         output_path = '.', model_name_save=None,early_stopping_patience = 10, min_delta=1e-5):
     # initialize placeholders for running values
     results = []    
     min_val_loss = np.inf

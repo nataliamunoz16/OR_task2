@@ -12,6 +12,7 @@ import torchvision.transforms as T
 from Segformer import segformer_mit_b3
 from deeplabv3plus import deeplabv3plus
 from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions)
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import matplotlib.pyplot as plt
 import random
 import time
@@ -107,12 +108,12 @@ def main():
     target_width = 384
     target_height = 384
     n_epochs = 20
-    max_lr = 1e-3
-    batch_size = 5
+    base_lr = 5e-5
+    batch_size = 3
     pretrained = True
     data_augmentation = False
     model_name = "segformer"
-    model_file = f"{model_name}_{target_height}_{target_width}_{max_lr}_{batch_size}"
+    model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
         suffixes.append("pretrained")
@@ -127,12 +128,30 @@ def main():
     transform = build_transforms()
     train_set, val_set, test_set = build_datasets(target_height,target_width,transform)
     train_loader, val_loader, test_loader = get_dataloaders(train_set, val_set, test_set, batch_size=batch_size)
-
     model = build_model(model_name, NUM_CLASSES, device, pretrained=pretrained)
 
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=max_lr)
-    scheduler = OneCycleLR(optimizer, max_lr= max_lr, epochs = n_epochs,steps_per_epoch = len(train_loader), pct_start=0.3, div_factor=10, anneal_strategy='cos')
+    optimizer = optim.Adam(model.parameters(), lr=base_lr, weight_decay=1e-4)
+    #scheduler = OneCycleLR(optimizer, max_lr= max_lr, epochs = n_epochs,steps_per_epoch = len(train_loader), pct_start=0.3, div_factor=10, anneal_strategy='cos')
+    warmup_epochs = 2
+
+    warmup_scheduler = LinearLR(
+        optimizer,
+        start_factor=0.1,
+        total_iters=warmup_epochs * len(train_loader)
+    )
+
+    cosine_scheduler = CosineAnnealingLR(
+        optimizer,
+        T_max=(n_epochs - warmup_epochs) * len(train_loader),
+        eta_min=1e-6
+    )
+
+    scheduler = SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, cosine_scheduler],
+        milestones=[warmup_epochs * len(train_loader)]
+    )
     results = {}
     start_train_val = time.time()
     _ = train_validate_model(model, n_epochs, model_name, criterion, optimizer, 
