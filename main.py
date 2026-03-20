@@ -109,7 +109,7 @@ def main():
     target_height = 384
     n_epochs = 20
     base_lr = 5e-5
-    batch_size = 3
+    batch_size = 5
     pretrained = True
     data_augmentation = False
     model_name = "segformer"
