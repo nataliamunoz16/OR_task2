@@ -108,7 +108,7 @@ def main():
     target_width = 384
     target_height = 384
     n_epochs = 20
-    base_lr = 5e-1
+    base_lr = 5e-07
     batch_size = 5
     pretrained = True
     data_augmentation = False
