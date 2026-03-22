@@ -110,9 +110,9 @@ def main():
     n_epochs = 20
     base_lr = 5e-05
     batch_size = 5
-    pretrained = False
+    pretrained = True
     data_augmentation = False
-    model_name = "segformer"
+    model_name = "deeplabv3+"
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
