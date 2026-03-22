@@ -105,12 +105,12 @@ def get_id_to_color():
 def main():
     set_seed(42)
 
-    target_width = 192
-    target_height = 192
+    target_width = 384
+    target_height = 384
     n_epochs = 20
     base_lr = 5e-05
     batch_size = 5
-    pretrained = True
+    pretrained = False
     data_augmentation = False
     model_name = "segformer"
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
