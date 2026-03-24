@@ -109,7 +109,7 @@ def main():
     target_height = 384
     n_epochs = 20
     base_lr = 5e-05
-    batch_size = 20
+    batch_size = 10
     pretrained = True
     data_augmentation = False
     model_name = "deeplabv3+"
