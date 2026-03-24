@@ -11,6 +11,7 @@ from torch.utils.data import random_split
 import torchvision.transforms as T
 from Segformer import segformer_mit_b3
 from deeplabv3plus import deeplabv3plus
+from unet import unet
 from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions)
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import matplotlib.pyplot as plt
@@ -36,8 +37,10 @@ def get_device():
         return torch.device("cuda")
     return torch.device("cpu")
 
+
 def build_transforms():
     return T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])])
+
 
 def build_datasets(target_height, target_width, transform):
     train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform)
@@ -52,9 +55,11 @@ def build_datasets(target_height, target_width, transform):
     train_set, val_set = random_split(train_set_full,[train_size, val_size],generator=generator)
     return train_set, val_set, test_set
 
+
 def build_model(model_name: str, num_classes: int, device: torch.device, pretrained: bool = True):
     if model_name == "deeplabv3+":
-        model = deeplabv3plus(num_classes)
+        model = deeplabv3plus(num_classes, pretrained)
+    
     elif model_name == "segformer":
         model = segformer_mit_b3(in_channels=3, num_classes=num_classes)
         if pretrained:
@@ -64,11 +69,18 @@ def build_model(model_name: str, num_classes: int, device: torch.device, pretrai
                 model.backbone.load_state_dict(state_dict)
             else:
                 print(f"Warning: pretrained weights not found at {weights_path}")
+    
     elif model_name == "maskRCNN":
         raise NotImplementedError("maskRCNN branch is not implemented yet.")
+
+    elif model_name == "unet":
+        model = unet(num_classes, pretrained)
+
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
+    
     return model.to(device)
+
 
 def get_id_to_color():
     return np.array([
@@ -102,6 +114,8 @@ def get_id_to_color():
         [128,128,255]
     ], dtype=np.uint8)
 
+
+
 def main():
     set_seed(42)
 
@@ -112,9 +126,10 @@ def main():
     batch_size = 10
     pretrained = True
     data_augmentation = False
-    model_name = "deeplabv3+"
+    model_name = ["deeplabv3+", "segformer", "maskRCNN", "unet"][3]
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
+
     if pretrained:
         suffixes.append("pretrained")
     if data_augmentation:
@@ -135,28 +150,15 @@ def main():
     #scheduler = OneCycleLR(optimizer, max_lr= max_lr, epochs = n_epochs,steps_per_epoch = len(train_loader), pct_start=0.3, div_factor=10, anneal_strategy='cos')
     warmup_epochs = 2
 
-    warmup_scheduler = LinearLR(
-        optimizer,
-        start_factor=0.1,
-        total_iters=warmup_epochs * len(train_loader)
-    )
-
-    cosine_scheduler = CosineAnnealingLR(
-        optimizer,
-        T_max=(n_epochs - warmup_epochs) * len(train_loader),
-        eta_min=1e-6
-    )
-
-    scheduler = SequentialLR(
-        optimizer,
-        schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[warmup_epochs * len(train_loader)]
-    )
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=warmup_epochs * len(train_loader))
+    cosine_scheduler = CosineAnnealingLR(optimizer, T_max=(n_epochs - warmup_epochs) * len(train_loader), eta_min=1e-6)
+    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, cosine_scheduler], milestones=[warmup_epochs * len(train_loader)])
+    
     results = {}
     start_train_val = time.time()
-    _ = train_validate_model(model, n_epochs, model_name, criterion, optimizer, 
-                         device, train_loader, val_loader,NUM_CLASSES, lr_scheduler = scheduler, output_path = config.MODELS, model_name_save=model_file)
+    _ = train_validate_model(model, n_epochs, model_name, criterion, optimizer, device, train_loader, val_loader,NUM_CLASSES, lr_scheduler = scheduler, output_path = config.MODELS, model_name_save=model_file)
     results['train_time'] = time.time() - start_train_val
+
     model_path_best_loss = os.path.join(config.MODELS, f"{model_file}_best_loss.pt")
     if not os.path.exists(model_path_best_loss):
         raise FileNotFoundError(f"Checkpoint not found for best loss: {model_path_best_loss}")
@@ -176,11 +178,11 @@ def main():
         }
     results['best loss model'] = result_best_loss
 
-
     model_path_mdice = os.path.join(config.MODELS, f"{model_file}_best_mDice.pt")
     if not os.path.exists(model_path_mdice):
         raise FileNotFoundError(f"Checkpoint not found for mDice: {model_path_mdice}")
     model.load_state_dict(torch.load(model_path_mdice, map_location=device))
+
     test_metrics = evaluate_model(model, test_loader, criterion, NUM_CLASSES, device)
     print(f"\nModel has {test_metrics['mDice']} best mean Dice in test set")
     result_mdice = {
@@ -198,7 +200,6 @@ def main():
     metrics_json_path = os.path.join(config.RESULTS, f"{model_file}_test_metrics.json")
     with open(metrics_json_path, "w") as f:
         json.dump(results, f, indent=4)
-
 
     #id_to_color = np.array([[i,i,i] for i in range(28)], dtype=np.uint8)
     id_to_color = get_id_to_color()

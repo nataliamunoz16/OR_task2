@@ -1,6 +1,6 @@
 from pathlib import Path
 
-ROOT = Path("/home/natalia/Escritorio/MAI/OR")
+ROOT = Path('/Users/laia/Desktop/OR/Practice_2')
 TRAIN_IMG= ROOT/"train2020/train/"
 TEST_IMG =ROOT/"val_test2020/test/"
 TRAIN_MASK = ROOT/"mask_train/"
