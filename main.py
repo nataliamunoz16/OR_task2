@@ -5,17 +5,20 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
-from dataset import FashionDataset
+from dataset import FashionDataset, FashionDatasetMaskRCNN
 import config
 from torch.utils.data import random_split
 import torchvision.transforms as T
 from Segformer import segformer_mit_b3
 from deeplabv3plus import deeplabv3plus
-from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions)
+from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions, train_one_epoch_maskrcnn, evaluate_maskrcnn)
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import matplotlib.pyplot as plt
 import random
 import time
+import torchvision
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 FULL_CLASSES = ('shirt, blouse','top, t-shirt, sweatshirt','sweater','cardigan','jacket','vest','pants','shorts','skirt','coat','dress','jumpsuit','cape','glasses','hat','headband, head covering, hair accessory','tie','glove','watch','belt','leg warmer','tights, stockings','sock','shoe','bag, wallet','scarf','umbrella','hood','collar','lapel','epaulette','sleeve','pocket','neckline','buckle','zipper','applique','bead','bow','flower','fringe','ribbon','rivet','ruffle','sequin','tassel')
 MAIN_CLASSES = FULL_CLASSES[:27]
@@ -39,9 +42,13 @@ def get_device():
 def build_transforms():
     return T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])])
 
-def build_datasets(target_height, target_width, transform):
-    train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform)
-    test_set = FashionDataset(config.TEST_IMG,config.TEST_MASK,target_height,target_width,transform)
+def build_datasets(target_height, target_width, transform, model_name):
+    if model_name == 'maskRCNN':
+        train_set_full = FashionDatasetMaskRCNN(config.TRAIN_IMG,config.ANNOTATIONS_TRAIN,transform, target_height,target_width)
+        test_set = FashionDatasetMaskRCNN(config.TEST_IMG,config.ANNOTATIONS_TEST, transform, target_height,target_width)
+    else:
+        train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform)
+        test_set = FashionDataset(config.TEST_IMG,config.TEST_MASK,target_height,target_width,transform)
 
     val_size = len(test_set)
     if val_size > len(train_set_full):
@@ -61,11 +68,16 @@ def build_model(model_name: str, num_classes: int, device: torch.device, pretrai
             weights_path = "segformers/segformer_mit_b3_imagenet_weights.pt"
             if os.path.exists(weights_path):
                 state_dict = torch.load(weights_path, map_location=device)
-                model.backbone.load_state_dict(state_dict)
             else:
                 print(f"Warning: pretrained weights not found at {weights_path}")
     elif model_name == "maskRCNN":
-        raise NotImplementedError("maskRCNN branch is not implemented yet.")
+        model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
+        model.backbone.load_state_dict(state_dict)
+        in_features_box = model.roi_heads.box_predictor.cls_score.in_features
+        model.roi_heads.box_predictor = FastRCNNPredictor(in_features_box, NUM_CLASSES)
+        in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
+        hidden_layer = 256
+        model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, NUM_CLASSES)
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
     return model.to(device)
@@ -105,10 +117,10 @@ def get_id_to_color():
 def main():
     set_seed(42)
 
-    target_width = 192
-    target_height = 192
+    target_width = 384
+    target_height = 384
     n_epochs = 20
-    base_lr = 5e-05
+    base_lr = 5e-07
     batch_size = 20
     pretrained = True
     data_augmentation = False
@@ -126,7 +138,7 @@ def main():
     print(f"Using device: {device}")
 
     transform = build_transforms()
-    train_set, val_set, test_set = build_datasets(target_height,target_width,transform)
+    train_set, val_set, test_set = build_datasets(target_height,target_width,transform, model_name)
     train_loader, val_loader, test_loader = get_dataloaders(train_set, val_set, test_set, batch_size=batch_size)
     model = build_model(model_name, NUM_CLASSES, device, pretrained=pretrained)
 
