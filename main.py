@@ -105,11 +105,11 @@ def get_id_to_color():
 def main():
     set_seed(42)
 
-    target_width = 384
-    target_height = 384
+    target_width = 192
+    target_height = 192
     n_epochs = 20
     base_lr = 5e-05
-    batch_size = 1
+    batch_size = 20
     pretrained = True
     data_augmentation = False
     model_name = "deeplabv3+"
