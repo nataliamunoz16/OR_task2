@@ -11,6 +11,7 @@ from torch.utils.data import random_split
 import torchvision.transforms as T
 from Segformer import segformer_mit_b3
 from deeplabv3plus import deeplabv3plus
+from unet import unet
 from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions, train_one_epoch_maskrcnn, evaluate_maskrcnn)
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import matplotlib.pyplot as plt
@@ -61,7 +62,7 @@ def build_datasets(target_height, target_width, transform, model_name):
 
 def build_model(model_name: str, num_classes: int, device: torch.device, pretrained: bool = True):
     if model_name == "deeplabv3+":
-        model = deeplabv3plus(num_classes)
+        model = deeplabv3plus(num_classes, pretrained=pretrained)
     elif model_name == "segformer":
         model = segformer_mit_b3(in_channels=3, num_classes=num_classes)
         if pretrained:
@@ -78,6 +79,8 @@ def build_model(model_name: str, num_classes: int, device: torch.device, pretrai
         in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
         hidden_layer = 256
         model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask, hidden_layer, NUM_CLASSES)
+    elif model_name == "unet":
+        model =unet(num_classes, pretrained)
     else:
         raise ValueError(f"Unknown model_name: {model_name}")
     return model.to(device)
@@ -120,11 +123,11 @@ def main():
     target_width = 384
     target_height = 384
     n_epochs = 20
-    base_lr = 0.5
+    base_lr = 5e-05
     batch_size = 20
     pretrained = True
     data_augmentation = False
-    model_name = "deeplabv3+"
+    model_name = "unet"
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
