@@ -13,6 +13,7 @@ mask_train_all/
 mask_train_incorrectas/
 mask_val/
 fashionpedia/
+generated/
 
 *.pth
 *.pt
