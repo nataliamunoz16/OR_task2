@@ -123,8 +123,8 @@ def main():
     target_width = 384
     target_height = 384
     n_epochs = 20
-    base_lr = 5e-05
-    batch_size = 45
+    base_lr = 0.5
+    batch_size = 20
     pretrained = True
     data_augmentation = False
     model_name = "unet"
