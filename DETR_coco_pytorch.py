@@ -260,6 +260,9 @@ class TorchCOCOLoader(datasets.CocoDetection):
             raw_boxes[:, 0::2] /= w
             raw_boxes[:, 1::2] /= h
             raw_boxes.clamp_(0, 1)
+            valid_boxes = ((raw_boxes[:, 2] > raw_boxes[:, 0]) &(raw_boxes[:, 3] > raw_boxes[:, 1]))
+            raw_boxes = raw_boxes[valid_boxes]
+            raw_classes = raw_classes[valid_boxes]
         else:
             raw_boxes = torch.empty((0, 4), dtype=torch.float32)
             raw_classes = torch.empty((0,), dtype=torch.int64)
@@ -272,6 +275,16 @@ class TorchCOCOLoader(datasets.CocoDetection):
             img_np = transformed["image"]
             raw_boxes = torch.tensor(transformed["bboxes"], dtype=torch.float32)
             raw_classes = torch.tensor(transformed["labels"], dtype=torch.int64)
+            if raw_boxes.numel() > 0:
+                valid_boxes = (
+                    (raw_boxes[:, 2] > raw_boxes[:, 0]) &
+                    (raw_boxes[:, 3] > raw_boxes[:, 1])
+                )
+                raw_boxes = raw_boxes[valid_boxes]
+                raw_classes = raw_classes[valid_boxes]
+            else:
+                raw_boxes = torch.empty((0, 4), dtype=torch.float32)
+                raw_classes = torch.empty((0,), dtype=torch.int64)
 
         # Apply `preproc_coco` for padding & cxcywh conversion
         classes, boxes, padding_mask = self.T_target(

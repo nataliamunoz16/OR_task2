@@ -13,6 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from torch.optim import AdamW
 from DETR_losses import compute_sample_loss
+import config
 
 """
 Based on https://github.com/dimiz51/DETR-Factory-PyTorch/
@@ -675,3 +676,138 @@ class DETRTrainer:
                 giou_losses=giou_losses,
             )
             self.save_checkpoint(epoch=epoch)
+
+
+if __name__ == "__main__":
+    import torch
+    from torch import nn
+    from torch.utils.data import DataLoader
+    from torchvision import ops
+    from DETR_coco_pytorch import TorchCOCOLoader, collate_fn
+    # Batch size for dataloaders and image size for model/pre-processing
+    BATCH_SIZE = 100
+    IMAGE_SIZE = 480
+    MAX_OBJECTS = 100
+    FREEZE_BACKBONE = True
+    EPOCHS = 150
+    LOG_FREQUENCY = 5 # Training-time losses will be logged according to this frequency
+    SAVE_FREQUENCY = 20 # Model weights will be saved according to this frequency
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu") # Training device
+    # NOTE: You can load the COCO dataset infromation or any other from the available datasets 
+    #       if it's in the DATASET_CLASSES class map. This map is a lookup dictionary with the
+    #       dataset name as key where each instance has the following attributes:
+    #           - "class_names" : The list of class names
+    #           - "empty_class_id": The ID of the class to be treated as the "empty" class for boxes
+    #           - "links": Contains some sort of link to download the dataset
+    # NOTE: All the available datasets are listed in the project README file.
+    FASHIONPEDIA_CLASSES = ['background','shirt, blouse','top, t-shirt, sweatshirt','sweater','cardigan','jacket','vest','pants','shorts','skirt','coat','dress','jumpsuit','cape','glasses','hat','headband, head covering, hair accessory','tie','glove','watch','belt','leg warmer','tights, stockings','sock','shoe','bag, wallet','scarf','umbrella']
+    DATASET_CLASSES ={
+        "fashionpedia": {
+            "class_names": FASHIONPEDIA_CLASSES,
+            "empty_class_id": 0,
+        }
+    }
+
+    CLASSES = DATASET_CLASSES["fashionpedia"]["class_names"]
+    EMPTY_CLASS_ID = DATASET_CLASSES["fashionpedia"]["empty_class_id"]
+
+
+    # Or explicitly set the  class labels/empty class ID for your custom dataset if its not added to the DATASET_CLASSES map...
+    # CLASSES = ["N/A", "something"]
+    # EMPTY_CLASS_ID = 0 # ID of the dataset classes to treat as "empty" class
+
+
+    # Load and COCO dataset (adjust the paths accordingly)
+    coco_ds_train = TorchCOCOLoader(
+        config.TRAIN_IMG,
+        config.ANNOTATIONS_TRAIN,
+        max_boxes=MAX_OBJECTS,
+        empty_class_id=EMPTY_CLASS_ID,
+        image_size=IMAGE_SIZE,
+        augment=True
+    )
+
+    coco_ds_val = TorchCOCOLoader(
+        config.TEST_IMG,
+        config.ANNOTATIONS_TEST,
+        max_boxes=MAX_OBJECTS,
+        empty_class_id=EMPTY_CLASS_ID,
+        image_size=IMAGE_SIZE,
+    )
+
+    train_loader = DataLoader(
+        coco_ds_train, batch_size=BATCH_SIZE, shuffle=True, collate_fn=collate_fn)
+
+    val_loader = DataLoader(
+        coco_ds_val, batch_size=BATCH_SIZE, shuffle=False, collate_fn=collate_fn
+    )
+
+    print(f"Training dataset size: {len(coco_ds_train)}")
+    print(f"Validation dataset size: {len(coco_ds_val)}")
+
+    import matplotlib.pyplot as plt
+    from DETR_visualizer import DETRBoxVisualizer
+
+    # Create a visualizer
+    visualizer = DETRBoxVisualizer(class_labels= CLASSES,
+                                empty_class_id=0)
+
+    # Visualize batches
+    dataloader_iter = iter(train_loader)
+    for i in range(1):
+        input_, (classes, boxes, masks, _) = next(dataloader_iter)
+        fig = plt.figure(figsize=(10, 10), constrained_layout=True)
+
+        for ix in range(4):
+            t_cl = classes[ix]
+            t_bbox = boxes[ix]
+            mask = masks[ix].bool()
+
+            # Filter padded classes/boxes using the binary mask...
+            t_cl = t_cl[mask]
+            t_bbox = t_bbox[mask] * IMAGE_SIZE
+
+            # Convert to x1y1x2y2 for visualization and denormalize boxes..
+            t_bbox = ops.box_convert(
+                t_bbox, in_fmt='cxcywh', out_fmt='xyxy')
+            
+            im = input_[ix]
+
+            ax = fig.add_subplot(2, 2, ix+1)
+            visualizer._visualize_image(im, t_bbox, t_cl, ax=ax)
+    detr_model = DETR(
+        d_model=256, n_classes=92, n_tokens=225, 
+        n_layers=6, n_heads=8, n_queries=MAX_OBJECTS, use_frozen_bn=True
+    )
+    """
+    CHECKPOINT_PATH = "<YOUR_DETR_WEIGHTS.pt>"
+
+    # Load the checkpoint
+    checkpoint = torch.load(CHECKPOINT_PATH, map_location=torch.device("cpu"))
+
+    # Load the weights into the model
+    # We don't use strict matching as you might want to use FrozenBatchNorm2D...
+    # Some pre-trained weights come from trainings using BatchNorm2D
+    print(detr_model.load_state_dict(checkpoint['state'], strict=False))
+
+    # Adapt the class prediction head to our new dataset
+    detr_model.linear_class = nn.Linear(detr_model.linear_class.in_features, len(CLASSES))
+    """
+
+
+    # Create a trainer for DETR
+    trainer = DETRTrainer(model = detr_model,
+                        train_loader= train_loader,
+                        val_loader=val_loader,
+                        device=device,
+                        epochs=EPOCHS,
+                        batch_size=BATCH_SIZE,
+                        log_freq=LOG_FREQUENCY,
+                        save_freq=SAVE_FREQUENCY,
+                        freeze_backbone= FREEZE_BACKBONE,
+                        num_queries=MAX_OBJECTS,
+                        empty_class_id=EMPTY_CLASS_ID)
+
+    # Start the training
+    trainer.train()
+    trainer.visualize_losses(save_dir = "./")
