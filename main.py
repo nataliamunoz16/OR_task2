@@ -123,7 +123,7 @@ def main():
     target_width = 384
     target_height = 384
     n_epochs = 20
-    base_lr = 0.5
+    base_lr = 0.005
     batch_size = 20
     pretrained = True
     data_augmentation = False
