@@ -12,7 +12,7 @@ import torchvision.transforms as T
 from Segformer import segformer_mit_b3
 from deeplabv3plus import deeplabv3plus
 from unet import unet
-from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions, train_one_epoch_maskrcnn, evaluate_maskrcnn)
+from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions)
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import matplotlib.pyplot as plt
 import random
@@ -120,10 +120,10 @@ def get_id_to_color():
 def main():
     set_seed(42)
 
-    target_width = 384
-    target_height = 384
+    target_width = 192
+    target_height = 192
     n_epochs = 20
-    base_lr = 0.005
+    base_lr = 5e-05
     batch_size = 20
     pretrained = True
     data_augmentation = False
