@@ -7,14 +7,12 @@ from PIL import Image, ImageEnhance
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-AUG_FRACTION=0.20   # fraction of training images to augment
+AUG_FRACTION=0.12   # fraction of training images to augment
 DUAL_AUG_PROB=0.50   # probability of applying TWO augmentations on the same image
 TEXTURE_PROB=0.40 # probability of changing clothes textures while doing the data augmenting
-USE_MIXUP_PROB=0 # probability of applying mixup
-OUTPUT_DIR= os.path.join(config.ROOT, "augmented")
+USE_MIXUP_PROB=0.15 # probability of applying mixup
+OUTPUT_DIR= os.path.join(config.ROOT)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-os.makedirs(os.path.join(OUTPUT_DIR, "images"), exist_ok=True)
-os.makedirs(os.path.join(OUTPUT_DIR, "masks"),  exist_ok=True)
 NO_TEXTURE_IDS = [5, 10, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 25, 26, 27]
 
 def load_pair(img_name:str):
@@ -24,8 +22,13 @@ def load_pair(img_name:str):
     return img, mask, mask_name
 
 def save_pair(img:np.ndarray, mask:np.ndarray, stem:str, tag:str):
-    Image.fromarray(img ).save(os.path.join(OUTPUT_DIR, "images", f"{stem}__{tag}.jpg"))
-    Image.fromarray(mask).save(os.path.join(OUTPUT_DIR, "masks",  f"{stem}__{tag}_seg.png"))
+    name = f"{stem}{tag}".replace("_","")
+    if USE_MIXUP_PROB>0:
+        Image.fromarray(img ).save(os.path.join(config.TRAIN_AUGMENTED_IMG2, f"{name}.jpg"))
+        Image.fromarray(mask).save(os.path.join(config.TRAIN_AUGMENTED_MASKS2,  f"{name}_seg.png"))
+    else:
+        Image.fromarray(img ).save(os.path.join(config.TRAIN_AUGMENTED_IMG, f"{name}.jpg"))
+        Image.fromarray(mask).save(os.path.join(config.TRAIN_AUGMENTED_MASKS,  f"{name}_seg.png"))
 
 
 ## augmentations
@@ -275,13 +278,14 @@ def main():
         
         if (idx + 1)%100 == 0:
             print(f"{idx+1}/{n_aug} done")
-    
+    """
     for i in range(6): # to generate 6 different subplots with different images
         n_debug = min(6, len(all_debug_rows))
         debug_rows = random.sample(all_debug_rows, n_debug)
         if debug_rows:
             save_debug_grid(debug_rows, os.path.join(OUTPUT_DIR, f"augmentation_overview{i}.png"))
     print("Done augmented pairs saved to", OUTPUT_DIR)
+    """
 
 
 if __name__ == "__main__":

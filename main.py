@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
-from dataset import FashionDataset, FashionDatasetMaskRCNN
+from dataset import FashionDataset
 import config
 from torch.utils.data import random_split
 import torchvision.transforms as T
@@ -43,13 +43,14 @@ def get_device():
 def build_transforms():
     return T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])])
 
-def build_datasets(target_height, target_width, transform, model_name):
-    if model_name == 'maskRCNN':
-        train_set_full = FashionDatasetMaskRCNN(config.TRAIN_IMG,config.ANNOTATIONS_TRAIN,transform, target_height,target_width)
-        test_set = FashionDatasetMaskRCNN(config.TEST_IMG,config.ANNOTATIONS_TEST, transform, target_height,target_width)
+def build_datasets(target_height, target_width, transform, data_augmentation=0):
+    if data_augmentation ==1:
+        train_set_full = FashionDataset(config.TRAIN_AUGMENTED_IMG,config.TRAIN_AUGMENTED_MASKS,target_height,target_width,transform)
+    elif data_augmentation ==2:
+        train_set_full = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform)
     else:
         train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform)
-        test_set = FashionDataset(config.TEST_IMG,config.TEST_MASK,target_height,target_width,transform)
+    test_set = FashionDataset(config.TEST_IMG,config.TEST_MASK,target_height,target_width,transform)
 
     val_size = len(test_set)
     if val_size > len(train_set_full):
@@ -120,20 +121,20 @@ def get_id_to_color():
 def main():
     set_seed(42)
 
-    target_width = 192
-    target_height = 192
+    target_width = 394
+    target_height = 394
     n_epochs = 20
     base_lr = 5e-05
     batch_size = 20
-    pretrained = True
-    data_augmentation = False
+    pretrained = False
+    data_augmentation = 1
     model_name = "unet"
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
         suffixes.append("pretrained")
-    if data_augmentation:
-        suffixes.append("data_aug")
+    if data_augmentation != 0:
+        suffixes.append(f"data_aug_{data_augmentation}")
     if suffixes:
         model_file += "_" + "_".join(suffixes)
 
@@ -141,7 +142,7 @@ def main():
     print(f"Using device: {device}")
 
     transform = build_transforms()
-    train_set, val_set, test_set = build_datasets(target_height,target_width,transform, model_name)
+    train_set, val_set, test_set = build_datasets(target_height,target_width,transform, data_augmentation)
     train_loader, val_loader, test_loader = get_dataloaders(train_set, val_set, test_set, batch_size=batch_size)
     model = build_model(model_name, NUM_CLASSES, device, pretrained=pretrained)
 

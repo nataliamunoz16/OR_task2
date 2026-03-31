@@ -13,6 +13,10 @@ mask_train_all/
 mask_train_incorrectas/
 mask_val/
 generated/
+augmented/
+augmented2/
+augmented_mask/
+augmented_mask2/
 
 *.pth
 *.pt
