@@ -132,10 +132,10 @@ def main():
     target_height = 394
     n_epochs = 20
     base_lr = 5e-05
-    batch_size = 20
+    batch_size = 5
     pretrained = True
     data_augmentation = 1
-    model_name = "unet"
+    model_name = "deeplabv3+"
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
