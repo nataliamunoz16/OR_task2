@@ -43,13 +43,11 @@ def get_device():
 def build_transforms():
     return T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])])
 
+def get_base_id(filename):
+    return filename.split(".")[0]
+
 def build_datasets(target_height, target_width, transform, data_augmentation=0):
-    if data_augmentation ==1:
-        train_set_full = FashionDataset(config.TRAIN_AUGMENTED_IMG,config.TRAIN_AUGMENTED_MASKS,target_height,target_width,transform)
-    elif data_augmentation ==2:
-        train_set_full = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform)
-    else:
-        train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform)
+    train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform)
     test_set = FashionDataset(config.TEST_IMG,config.TEST_MASK,target_height,target_width,transform)
 
     val_size = len(test_set)
@@ -59,6 +57,15 @@ def build_datasets(target_height, target_width, transform, data_augmentation=0):
     train_size = len(train_set_full) - val_size
     generator = torch.Generator().manual_seed(42)
     train_set, val_set = random_split(train_set_full,[train_size, val_size],generator=generator)
+
+    val_indices = val_set.indices
+    val_ids = {get_base_id(train_set_full.img_files[i]) for i in val_indices}
+    if data_augmentation ==1:
+        train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG,config.TRAIN_AUGMENTED_MASKS,target_height,target_width,transform)
+    elif data_augmentation ==2:
+        train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform)
+    filtered_indices=[i for i,f in enumerate(train_set.img_files) if get_base_id(f) not in val_ids]
+    train_set=torch.utils.data.Subset(train_set, filtered_indices)
     return train_set, val_set, test_set
 
 def build_model(model_name: str, num_classes: int, device: torch.device, pretrained: bool = True):
