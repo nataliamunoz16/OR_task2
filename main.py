@@ -128,14 +128,14 @@ def get_id_to_color():
 def main():
     set_seed(42)
 
-    target_width = 394
-    target_height = 394
+    target_width = 384
+    target_height = 384
     n_epochs = 20
     base_lr = 5e-05
-    batch_size = 5
+    batch_size = 20
     pretrained = True
     data_augmentation = 1
-    model_name = "deeplabv3+"
+    model_name = "unet"
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
