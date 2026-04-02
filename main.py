@@ -134,7 +134,7 @@ def main():
     base_lr = 5e-05
     batch_size = 20
     pretrained = True
-    data_augmentation = 1
+    data_augmentation = 2
     model_name = "unet"
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
