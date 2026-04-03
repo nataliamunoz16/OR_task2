@@ -20,6 +20,7 @@ import time
 import torchvision
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+import segmentation_models_pytorch as smp
 
 FULL_CLASSES = ('shirt, blouse','top, t-shirt, sweatshirt','sweater','cardigan','jacket','vest','pants','shorts','skirt','coat','dress','jumpsuit','cape','glasses','hat','headband, head covering, hair accessory','tie','glove','watch','belt','leg warmer','tights, stockings','sock','shoe','bag, wallet','scarf','umbrella','hood','collar','lapel','epaulette','sleeve','pocket','neckline','buckle','zipper','applique','bead','bow','flower','fringe','ribbon','rivet','ruffle','sequin','tassel')
 MAIN_CLASSES = FULL_CLASSES[:27]
@@ -57,7 +58,8 @@ def build_datasets(target_height, target_width, transform, data_augmentation=0):
     train_size = len(train_set_full) - val_size
     generator = torch.Generator().manual_seed(42)
     train_set, val_set = random_split(train_set_full,[train_size, val_size],generator=generator)
-
+    if data_augmentation ==0:
+        return train_set, val_set, test_set
     val_indices = val_set.indices
     val_ids = {get_base_id(train_set_full.img_files[i]) for i in val_indices}
     if data_augmentation ==1:
@@ -132,17 +134,22 @@ def main():
     n_epochs = 20
     base_lr = 5e-05
     batch_size = 5
+    focal_loss=True
     pretrained = True
-    data_augmentation = 1
-    model_name = "segformer"
+    data_augmentation = 0
+    model_name = "deeplabv3+"
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
         suffixes.append("pretrained")
     if data_augmentation != 0:
         suffixes.append(f"data_aug_{data_augmentation}")
+    if focal_loss:
+        suffixes.append("focal_loss")
     if suffixes:
         model_file += "_" + "_".join(suffixes)
+    
+
 
     device = get_device()
     print(f"Using device: {device}")
@@ -152,28 +159,17 @@ def main():
     train_loader, val_loader, test_loader = get_dataloaders(train_set, val_set, test_set, batch_size=batch_size)
     model = build_model(model_name, NUM_CLASSES, device, pretrained=pretrained)
 
-    criterion = nn.CrossEntropyLoss()
+    if focal_loss:
+        criterion = smp.losses.FocalLoss(mode="multiclass")
+    else:
+        criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=base_lr, weight_decay=1e-4)
     #scheduler = OneCycleLR(optimizer, max_lr= max_lr, epochs = n_epochs,steps_per_epoch = len(train_loader), pct_start=0.3, div_factor=10, anneal_strategy='cos')
     warmup_epochs = 2
 
-    warmup_scheduler = LinearLR(
-        optimizer,
-        start_factor=0.1,
-        total_iters=warmup_epochs * len(train_loader)
-    )
-
-    cosine_scheduler = CosineAnnealingLR(
-        optimizer,
-        T_max=(n_epochs - warmup_epochs) * len(train_loader),
-        eta_min=1e-6
-    )
-
-    scheduler = SequentialLR(
-        optimizer,
-        schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[warmup_epochs * len(train_loader)]
-    )
+    warmup_scheduler = LinearLR(optimizer,start_factor=0.1,total_iters=warmup_epochs * len(train_loader))
+    cosine_scheduler = CosineAnnealingLR(optimizer,T_max=(n_epochs - warmup_epochs) * len(train_loader),eta_min=1e-6)
+    scheduler = SequentialLR(optimizer,schedulers=[warmup_scheduler, cosine_scheduler],milestones=[warmup_epochs * len(train_loader)])
     results = {}
     start_train_val = time.time()
     _ = train_validate_model(model, n_epochs, model_name, criterion, optimizer, 

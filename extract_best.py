@@ -54,7 +54,7 @@ def proces_jsons(directory=".", prefix="model_name", sufix="_validation_metrics.
 if __name__ == "__main__":
     proces_jsons(
         directory="results",
-        prefix="deeplabv3+",
+        prefix="unet",
         sufix="_validation_metrics.json",
-        output="deeplabv3+_best_results.json"
+        output="unet_best_results.json"
     )

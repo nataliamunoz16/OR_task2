@@ -327,3 +327,6 @@ def collate_fn(inputs):
     masks = torch.stack([i[1][2].to(dtype=torch.long) for i in inputs])
     image_ids = torch.stack([i[1][3] for i in inputs])
     return input_, (classes, boxes, masks, image_ids)
+
+
+
