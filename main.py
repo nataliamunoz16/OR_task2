@@ -142,10 +142,10 @@ def main():
 
     fine_tune=True
     num_instances=1000
-    min_dice = 0.7
+    min_dice = 0.5
     best_model_path= "/home/natalia/Escritorio/MAI/OR/results/deeplabv3+_384_384_5e-05_5_pretrained_validation_metrics.json"
     best_model_pth = "/home/natalia/Escritorio/MAI/OR/models/deeplabv3+_384_384_5e-05_5_pretrained_best_mDice.pt"
-    background = False
+    background = True
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
