@@ -25,7 +25,7 @@ def compute_label_distribution_train(dataset, num_classes=28):
             pixel_counts[value][1] = pixel_counts[value][1] + 1
     print("Label distribution statistics:")
     for class_id in pixel_counts.keys():
-        print(f"Label: {FULL_CLASSES[class_id]};  Number of instances: {pixel_counts[class_id][1]};  pixels per instance: {pixel_counts[class_id][0]/pixel_counts[class_id][1]:.2f}")
+        print(f"Label: {FULL_CLASSES[class_id]};  Number of instances: {pixel_counts[class_id][1]};  pixels per instance: {pixel_counts[class_id][0]/(pixel_counts[class_id][1]+0.0001):.2f}")
     
     return pixel_counts
 
@@ -45,7 +45,7 @@ def overrepresented(best_model_path, background=True, number_of_instances=1000, 
     data = compute_label_distribution_train(train_set)
 
     #Metrics
-    with open(best_model_path, "w") as f:
+    with open(best_model_path, "r") as f:
         metrics = json.load(f)
     for i, k in enumerate(data.keys()):
         data[k].append(metrics[18]["dice_per_class"][i])
@@ -56,9 +56,11 @@ def overrepresented(best_model_path, background=True, number_of_instances=1000, 
     overrepresented_ids = []
     if not background:
         overrepresented_ids.append(0)
-    for i in range(1, len(data.keys())):
-        if data[data.keys()[i]][1]>number_of_instances and data[data.keys()[i]][2]>min_dice:
-            overrepresented_ids.append(data.keys()[i])
+    data_keys=list(data.keys())
+    for i in range(1, len(data_keys)):
+        if data[data_keys[i]][1]>number_of_instances and data[data_keys[i]][2]>min_dice:
+            overrepresented_ids.append(data_keys[i])
+    return overrepresented_ids
 
 if __name__ == "__main__":
     transform = build_transforms()

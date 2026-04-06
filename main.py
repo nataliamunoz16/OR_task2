@@ -68,7 +68,12 @@ def build_datasets(target_height, target_width, transform, data_augmentation=0, 
     elif data_augmentation ==2:
         train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform)
     if len(fine_tune)>0:
-        train_set = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform, overrepresented_ids=fine_tune)
+        if data_augmentation ==1:
+            train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG,config.TRAIN_AUGMENTED_MASKS,target_height,target_width,transform, overrepresented_ids=fine_tune)
+        elif data_augmentation ==2:
+            train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform, overrepresented_ids=fine_tune)
+        else:
+            train_set = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform, overrepresented_ids=fine_tune)
     filtered_indices=[i for i,f in enumerate(train_set.img_files) if get_base_id(f) not in val_ids]
     train_set=torch.utils.data.Subset(train_set, filtered_indices)
     return train_set, val_set, test_set
@@ -125,7 +130,6 @@ def get_id_to_color():
 
 def main():
     set_seed(42)
-    best_model_path= "/home/natalia/Escritorio/MAI/OR/results/deeplabv3+_384_384_5e-05_5_pretrained_validation_metrics.json"
     target_width = 384
     target_height = 384
     n_epochs = 20
@@ -133,105 +137,109 @@ def main():
     batch_size = 5
     focal_loss=False
     pretrained = True
-    data_augmentations = [1, 2]
-    #data_augmentation = 1
-    model_name = "segformer"
-    fine_tune=False
-    background = True
-    for data_augmentation in data_augmentations:
-        model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
-        suffixes = []
-        if pretrained:
-            suffixes.append("pretrained")
-        if data_augmentation != 0:
-            suffixes.append(f"data_aug_{data_augmentation}")
-        if focal_loss:
-            suffixes.append("focal_loss")
-        if fine_tune:
-            suffixes.append("fine_tune")
-        if suffixes:
-            model_file += "_" + "_".join(suffixes)
-        
+    data_augmentation = 0
+    model_name = "deeplabv3+"
+
+    fine_tune=True
+    num_instances=1000
+    min_dice = 0.7
+    best_model_path= "/home/natalia/Escritorio/MAI/OR/results/deeplabv3+_384_384_5e-05_5_pretrained_validation_metrics.json"
+    best_model_pth = "/home/natalia/Escritorio/MAI/OR/models/deeplabv3+_384_384_5e-05_5_pretrained_best_mDice.pt"
+    background = False
+    model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
+    suffixes = []
+    if pretrained:
+        suffixes.append("pretrained")
+    if data_augmentation != 0:
+        suffixes.append(f"data_aug_{data_augmentation}")
+    if focal_loss:
+        suffixes.append("focal_loss")
+    if fine_tune:
+        suffixes.append(f"fine_tune_{num_instances}_{min_dice}_{background}")
+    if suffixes:
+        model_file += "_" + "_".join(suffixes)
+
+    device = get_device()
+    print(f"Using device: {device}")
+    if fine_tune:
+        overrepresented_ids=overrepresented(best_model_path, background=background, number_of_instances=num_instances, min_dice=min_dice)
+        print(f"Overrepresented ids: {overrepresented_ids}")
+    else:
+        overrepresented_ids=[]
+    transform = build_transforms()
+    train_set, val_set, test_set = build_datasets(target_height,target_width,transform, data_augmentation, fine_tune=overrepresented_ids)
+    train_loader, val_loader, test_loader = get_dataloaders(train_set, val_set, test_set, batch_size=batch_size)
+    model = build_model(model_name, NUM_CLASSES, device, pretrained=pretrained)
+
+    if focal_loss:
+        criterion = smp.losses.FocalLoss(mode="multiclass")
+    else:
+        criterion = nn.CrossEntropyLoss()
+    if fine_tune:
+        if not os.path.exists(best_model_pth):
+            raise FileNotFoundError(f"Checkpoint not found for fine tuning: {best_model_pth}")
+        model.load_state_dict(torch.load(best_model_pth, map_location=device))
+        criterion = nn.CrossEntropyLoss(ignore_index=255)
+    optimizer = optim.Adam(model.parameters(), lr=base_lr, weight_decay=1e-4)
+    
+    warmup_epochs = 2
+    warmup_scheduler = LinearLR(optimizer,start_factor=0.1,total_iters=warmup_epochs * len(train_loader))
+    cosine_scheduler = CosineAnnealingLR(optimizer,T_max=(n_epochs - warmup_epochs) * len(train_loader),eta_min=1e-6)
+    scheduler = SequentialLR(optimizer,schedulers=[warmup_scheduler, cosine_scheduler],milestones=[warmup_epochs * len(train_loader)])
+    results = {}
+    start_train_val = time.time()
+    _ = train_validate_model(model, n_epochs, model_name, criterion, optimizer, 
+                        device, train_loader, val_loader,NUM_CLASSES, lr_scheduler = scheduler, output_path = config.MODELS, model_name_save=model_file)
+    results['train_time'] = time.time() - start_train_val
+    model_path_best_loss = os.path.join(config.MODELS, f"{model_file}_best_loss.pt")
+    if not os.path.exists(model_path_best_loss):
+        raise FileNotFoundError(f"Checkpoint not found for best loss: {model_path_best_loss}")
+    model.load_state_dict(torch.load(model_path_best_loss, map_location=device))
+    test_metrics = evaluate_model(model, test_loader, criterion, NUM_CLASSES, device)
+    print(f"\nModel has {test_metrics['mDice']} mean Dice in test set")
+    result_best_loss = {
+            "mIoU": float(test_metrics["mIoU"]),
+            "mDice": float(test_metrics["mDice"]),
+            "mDice_no_bg": float(test_metrics["mDice_no_bg"]),
+            "accuracy": float(test_metrics["accuracy"]),
+            "mean_acc": float(test_metrics["mean_acc"]),
+            "mean_acc_no_bg": float(test_metrics["mean_acc_no_bg"]),
+            "dice_per_class": test_metrics["dice_per_class"].tolist(),
+            "accuracy_per_class": test_metrics["accuracy_per_class"].tolist(),
+            "iou_per_class": test_metrics["iou_per_class"].tolist(),
+        }
+    results['best loss model'] = result_best_loss
 
 
-        device = get_device()
-        print(f"Using device: {device}")
-        if fine_tune:
-            overrepresented_ids=overrepresented(best_model_path, background)
-        else:
-            overrepresented_ids=[]
-        transform = build_transforms()
-        train_set, val_set, test_set = build_datasets(target_height,target_width,transform, data_augmentation, fine_tune=overrepresented_ids)
-        train_loader, val_loader, test_loader = get_dataloaders(train_set, val_set, test_set, batch_size=batch_size)
-        model = build_model(model_name, NUM_CLASSES, device, pretrained=pretrained)
-
-        if focal_loss:
-            criterion = smp.losses.FocalLoss(mode="multiclass")
-        else:
-            criterion = nn.CrossEntropyLoss()
-        if fine_tune:
-            criterion = nn.CrossEntropyLoss(ignore_index=255)
-        optimizer = optim.Adam(model.parameters(), lr=base_lr, weight_decay=1e-4)
-        #scheduler = OneCycleLR(optimizer, max_lr= max_lr, epochs = n_epochs,steps_per_epoch = len(train_loader), pct_start=0.3, div_factor=10, anneal_strategy='cos')
-        warmup_epochs = 2
-
-        warmup_scheduler = LinearLR(optimizer,start_factor=0.1,total_iters=warmup_epochs * len(train_loader))
-        cosine_scheduler = CosineAnnealingLR(optimizer,T_max=(n_epochs - warmup_epochs) * len(train_loader),eta_min=1e-6)
-        scheduler = SequentialLR(optimizer,schedulers=[warmup_scheduler, cosine_scheduler],milestones=[warmup_epochs * len(train_loader)])
-        results = {}
-        start_train_val = time.time()
-        _ = train_validate_model(model, n_epochs, model_name, criterion, optimizer, 
-                            device, train_loader, val_loader,NUM_CLASSES, lr_scheduler = scheduler, output_path = config.MODELS, model_name_save=model_file)
-        results['train_time'] = time.time() - start_train_val
-        model_path_best_loss = os.path.join(config.MODELS, f"{model_file}_best_loss.pt")
-        if not os.path.exists(model_path_best_loss):
-            raise FileNotFoundError(f"Checkpoint not found for best loss: {model_path_best_loss}")
-        model.load_state_dict(torch.load(model_path_best_loss, map_location=device))
-        test_metrics = evaluate_model(model, test_loader, criterion, NUM_CLASSES, device)
-        print(f"\nModel has {test_metrics['mDice']} mean Dice in test set")
-        result_best_loss = {
-                "mIoU": float(test_metrics["mIoU"]),
-                "mDice": float(test_metrics["mDice"]),
-                "mDice_no_bg": float(test_metrics["mDice_no_bg"]),
-                "accuracy": float(test_metrics["accuracy"]),
-                "mean_acc": float(test_metrics["mean_acc"]),
-                "mean_acc_no_bg": float(test_metrics["mean_acc_no_bg"]),
-                "dice_per_class": test_metrics["dice_per_class"].tolist(),
-                "accuracy_per_class": test_metrics["accuracy_per_class"].tolist(),
-                "iou_per_class": test_metrics["iou_per_class"].tolist(),
-            }
-        results['best loss model'] = result_best_loss
+    model_path_mdice = os.path.join(config.MODELS, f"{model_file}_best_mDice.pt")
+    if not os.path.exists(model_path_mdice):
+        raise FileNotFoundError(f"Checkpoint not found for mDice: {model_path_mdice}")
+    model.load_state_dict(torch.load(model_path_mdice, map_location=device))
+    test_metrics = evaluate_model(model, test_loader, criterion, NUM_CLASSES, device)
+    print(f"\nModel has {test_metrics['mDice']} best mean Dice in test set")
+    result_mdice = {
+            "mIoU": float(test_metrics["mIoU"]),
+            "mDice": float(test_metrics["mDice"]),
+            "mDice_no_bg": float(test_metrics["mDice_no_bg"]),
+            "accuracy": float(test_metrics["accuracy"]),
+            "mean_acc": float(test_metrics["mean_acc"]),
+            "mean_acc_no_bg": float(test_metrics["mean_acc_no_bg"]),
+            "dice_per_class": test_metrics["dice_per_class"].tolist(),
+            "accuracy_per_class": test_metrics["accuracy_per_class"].tolist(),
+            "iou_per_class": test_metrics["iou_per_class"].tolist(),
+        }
+    results['mDice model'] = result_mdice
+    metrics_json_path = os.path.join(config.RESULTS, f"{model_file}_test_metrics.json")
+    with open(metrics_json_path, "w") as f:
+        json.dump(results, f, indent=4)
 
 
-        model_path_mdice = os.path.join(config.MODELS, f"{model_file}_best_mDice.pt")
-        if not os.path.exists(model_path_mdice):
-            raise FileNotFoundError(f"Checkpoint not found for mDice: {model_path_mdice}")
-        model.load_state_dict(torch.load(model_path_mdice, map_location=device))
-        test_metrics = evaluate_model(model, test_loader, criterion, NUM_CLASSES, device)
-        print(f"\nModel has {test_metrics['mDice']} best mean Dice in test set")
-        result_mdice = {
-                "mIoU": float(test_metrics["mIoU"]),
-                "mDice": float(test_metrics["mDice"]),
-                "mDice_no_bg": float(test_metrics["mDice_no_bg"]),
-                "accuracy": float(test_metrics["accuracy"]),
-                "mean_acc": float(test_metrics["mean_acc"]),
-                "mean_acc_no_bg": float(test_metrics["mean_acc_no_bg"]),
-                "dice_per_class": test_metrics["dice_per_class"].tolist(),
-                "accuracy_per_class": test_metrics["accuracy_per_class"].tolist(),
-                "iou_per_class": test_metrics["iou_per_class"].tolist(),
-            }
-        results['mDice model'] = result_mdice
-        metrics_json_path = os.path.join(config.RESULTS, f"{model_file}_test_metrics.json")
-        with open(metrics_json_path, "w") as f:
-            json.dump(results, f, indent=4)
-
-
-        #id_to_color = np.array([[i,i,i] for i in range(28)], dtype=np.uint8)
-        id_to_color = get_id_to_color()
-        num_test_samples = 10
-        _, axes = plt.subplots(num_test_samples, 3, figsize=(3*6, num_test_samples * 4))
-        visualize_predictions(model, test_set, axes, device, numTestSamples=num_test_samples, 
-                            id_to_color = id_to_color, model_name_save = model_file)
+    #id_to_color = np.array([[i,i,i] for i in range(28)], dtype=np.uint8)
+    id_to_color = get_id_to_color()
+    num_test_samples = 10
+    _, axes = plt.subplots(num_test_samples, 3, figsize=(3*6, num_test_samples * 4))
+    visualize_predictions(model, test_set, axes, device, numTestSamples=num_test_samples, 
+                        id_to_color = id_to_color, model_name_save = model_file)
 
 if __name__ == '__main__':
     main()
