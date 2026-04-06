@@ -7,7 +7,7 @@ import numpy as np
 from pycocotools.coco import COCO
 
 class FashionDataset(Dataset):
-    def __init__(self, img_dir, mask_dir, target_height=768, target_width=512, transform=None, originals=False):
+    def __init__(self, img_dir, mask_dir, target_height=768, target_width=512, transform=None, originals=False, overrepresented_ids=[]):
         self.img_dir = img_dir
         self.mask_dir = mask_dir
         self.transform = transform
@@ -20,6 +20,7 @@ class FashionDataset(Dataset):
         self.img_files = sorted(name_img_files)
         self.mask_files = sorted(mask_img_files)
         self.originals = originals
+        self.overrepresented_ids= overrepresented_ids
 
     def __len__(self):
         return len(self.img_files)
@@ -50,6 +51,8 @@ class FashionDataset(Dataset):
         mask = np.array(padded_mask)
         if mask.ndim == 3:
             mask = mask[:,:,0]
+        if len(self.overrepresented_ids)>0:
+            mask[np.isin(mask, self.overrepresented_ids)]=255
         if self.transform:
             image = self.transform(padded_image)
         else:
