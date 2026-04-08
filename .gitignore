@@ -17,6 +17,8 @@ augmented/
 augmented2/
 augmented_mask/
 augmented_mask2/
+yolo_fashionpedia/
+yolo_fashionpedia_detection/
 
 *.pth
 *.pt
