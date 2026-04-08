@@ -422,7 +422,10 @@ def train_validate_model(model, num_epochs, model_name, criterion, optimizer,
         for inputs, labels in tqdm(dataloader_train, total=len_train_loader):
             inputs = inputs.to(device)
             labels = labels.to(device) 
-
+            valid_pixels=(labels!= 255).sum().item()
+            if valid_pixels== 0:
+                print("Batch with 0 valid pixels")
+                continue
             # Forward pass
             y_preds = model(inputs)
             loss = criterion(y_preds, labels)

@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import OneCycleLR
-from dataset import FashionDataset
+from dataset import FashionDataset, FashionDatasetCropped
 import config
 from torch.utils.data import random_split
 import torchvision.transforms as T
@@ -48,9 +48,9 @@ def build_transforms():
 def get_base_id(filename):
     return filename.split(".")[0]
 
-def build_datasets(target_height, target_width, transform, data_augmentation=0, fine_tune=[]):
-    train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform)
-    test_set = FashionDataset(config.TEST_IMG,config.TEST_MASK,target_height,target_width,transform)
+def build_datasets(target_height, target_width, transform, data_augmentation=0, fine_tune=[], crops_minor=False):
+    train_set_full = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform, crops_minor=crops_minor)
+    test_set = FashionDataset(config.TEST_IMG,config.TEST_MASK,target_height,target_width,transform, crops_minor=crops_minor)
 
     val_size = len(test_set)
     if val_size > len(train_set_full):
@@ -64,16 +64,31 @@ def build_datasets(target_height, target_width, transform, data_augmentation=0, 
     val_indices = val_set.indices
     val_ids = {get_base_id(train_set_full.img_files[i]) for i in val_indices}
     if data_augmentation ==1:
-        train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG,config.TRAIN_AUGMENTED_MASKS,target_height,target_width,transform)
+        train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG,config.TRAIN_AUGMENTED_MASKS,target_height,target_width,transform, crops_minor=crops_minor)
     elif data_augmentation ==2:
-        train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform)
-    if len(fine_tune)>0:
+        train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform, crops_minor=crops_minor)
+    if len(fine_tune)>0 and not crops_minor:
         if data_augmentation ==1:
-            train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG,config.TRAIN_AUGMENTED_MASKS,target_height,target_width,transform, overrepresented_ids=fine_tune)
+            train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG,config.TRAIN_AUGMENTED_MASKS,target_height,target_width,transform, overrepresented_ids=fine_tune, crops_minor=crops_minor)
         elif data_augmentation ==2:
-            train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform, overrepresented_ids=fine_tune)
+            train_set = FashionDataset(config.TRAIN_AUGMENTED_IMG2,config.TRAIN_AUGMENTED_MASKS2,target_height,target_width,transform, overrepresented_ids=fine_tune, crops_minor=crops_minor)
         else:
-            train_set = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform, overrepresented_ids=fine_tune)
+            train_set = FashionDataset(config.TRAIN_IMG,config.TRAIN_MASK,target_height,target_width,transform, overrepresented_ids=fine_tune, crops_minor=crops_minor)
+            if 0 in fine_tune:
+                valid_ind=[]
+                for i in range(len(train_set)):
+                    _,mask = train_set[i]
+                    if (mask!=255).any():
+                        valid_ind.append(i)
+                filtered_indices=[i for i,f in enumerate(train_set.img_files) if get_base_id(f) not in val_ids]
+                valid_final_ind = [i for i in filtered_indices if i in valid_ind]
+                train_set = torch.utils.data.Subset(train_set, valid_final_ind)
+                return train_set, val_set, test_set
+    if crops_minor:
+        train_set = FashionDatasetCropped(config.TRAIN_IMG,config.TRAIN_MASK, config.ANNOTATIONS_TRAIN, target_height,target_width,transform, overrepresented_ids=fine_tune)
+        filtered_indices=[i for i,f in enumerate(train_set.samples) if (get_base_id(f["img_file"]) not in val_ids)]
+        train_set=torch.utils.data.Subset(train_set, filtered_indices)
+        return train_set, val_set, test_set
     filtered_indices=[i for i,f in enumerate(train_set.img_files) if get_base_id(f) not in val_ids]
     train_set=torch.utils.data.Subset(train_set, filtered_indices)
     return train_set, val_set, test_set
@@ -140,12 +155,13 @@ def main():
     data_augmentation = 0
     model_name = "deeplabv3+"
 
-    fine_tune=True
+    crops_minor = True
+    fine_tune=False
     num_instances=1000
-    min_dice = 0.5
+    min_dice = 0.7
     best_model_path= "/home/natalia/Escritorio/MAI/OR/results/deeplabv3+_384_384_5e-05_5_pretrained_validation_metrics.json"
     best_model_pth = "/home/natalia/Escritorio/MAI/OR/models/deeplabv3+_384_384_5e-05_5_pretrained_best_mDice.pt"
-    background = False
+    background = True
     model_file = f"{model_name}_{target_height}_{target_width}_{base_lr}_{batch_size}"
     suffixes = []
     if pretrained:
@@ -156,18 +172,20 @@ def main():
         suffixes.append("focal_loss")
     if fine_tune:
         suffixes.append(f"fine_tune_{num_instances}_{min_dice}_{background}")
+    if crops_minor:
+        suffixes.append("crops_minor")
     if suffixes:
         model_file += "_" + "_".join(suffixes)
 
     device = get_device()
     print(f"Using device: {device}")
-    if fine_tune:
+    if fine_tune or crops_minor:
         overrepresented_ids=overrepresented(best_model_path, background=background, number_of_instances=num_instances, min_dice=min_dice)
         print(f"Overrepresented ids: {overrepresented_ids}")
     else:
         overrepresented_ids=[]
     transform = build_transforms()
-    train_set, val_set, test_set = build_datasets(target_height,target_width,transform, data_augmentation, fine_tune=overrepresented_ids)
+    train_set, val_set, test_set = build_datasets(target_height,target_width,transform, data_augmentation, fine_tune=overrepresented_ids, crops_minor = crops_minor)
     train_loader, val_loader, test_loader = get_dataloaders(train_set, val_set, test_set, batch_size=batch_size)
     model = build_model(model_name, NUM_CLASSES, device, pretrained=pretrained)
 
