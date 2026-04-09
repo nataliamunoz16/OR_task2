@@ -1,0 +1,20 @@
+{
+    "run_name": "yolo11s_img384_ep50_bs16_lr0.01_wd0.0005_",
+    "yolo_version": "yolo11",
+    "model_size": "s",
+    "img_size": 384,
+    "epochs": 50,
+    "batch_size": 16,
+    "lr0": 0.01,
+    "lrf": 0.01,
+    "weight_decay": 0.0005,
+    "momentum": 0.937,
+    "warmup_epochs": 3,
+    "patience": 15,
+    "pretrained": true,
+    "train_time_s": 15719.5,
+    "mDice_no_bg": 0.5581,
+    "accuracy": 0.9514,
+    "mIoU": 0.4376,
+    "mDice": 0.5733
+}

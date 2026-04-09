@@ -19,6 +19,7 @@ augmented_mask/
 augmented_mask2/
 yolo_fashionpedia_detection/
 yolo_fashionpedia/labels/
+yolo_fashionpedia/images/
 *.pth
 *.pt
 *.ckpt
