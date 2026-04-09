@@ -1,0 +1,33 @@
+names:
+- shirt, blouse
+- top,t-shirt,sweatshirt
+- sweater
+- cardigan
+- jacket
+- vest
+- pants
+- shorts
+- skirt
+- coat
+- dress
+- jumpsuit
+- cape
+- glasses
+- hat
+- headband,head covering,hair accessory
+- tie
+- glove
+- watch
+- belt
+- leg warmer
+- tights,stockings
+- sock
+- shoe
+- bag,wallet
+- scarf
+- umbrella
+nc: 27
+path: /home/natalia/Escritorio/MAI/OR/yolo_fashionpedia
+test: /home/natalia/Escritorio/MAI/OR/yolo_fashionpedia/test.txt
+train: /home/natalia/Escritorio/MAI/OR/yolo_fashionpedia/train.txt
+val: /home/natalia/Escritorio/MAI/OR/yolo_fashionpedia/val.txt
