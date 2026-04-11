@@ -323,6 +323,20 @@ def grid_search(yaml_path: Path, grid: dict, fixed: dict, output_dir: Path) -> N
 
 
 #Data preparation: ONLY necessry to run it once
+def copy_images_to_dataset(yolo_dataset_dir: Path, train_paths: list[str], val_paths: list[str], test_paths: list[str]):
+    """
+    Physically copies images from source paths to the yolo_dataset_dir/images folder.
+    """
+    for split, paths in [("train", train_paths), ("val", val_paths), ("test", test_paths)]:
+        dest_dir=yolo_dataset_dir / "images" / split
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        
+        print(f"Copying {split} images to {dest_dir}...")
+        for p in tqdm(paths, desc=f"Copying {split}"):
+            src=Path(p)
+            dst=dest_dir / src.name
+            if src.exists() and not dst.exists():
+                shutil.copy(src, dst)
 
 def prepare_data(yolo_dataset_dir:Path, class_ids_to_keep:list[int],seed:int=42) -> Path:
     yaml_path=yolo_dataset_dir/"fashionpedia.yaml"
@@ -354,22 +368,29 @@ def prepare_data(yolo_dataset_dir:Path, class_ids_to_keep:list[int],seed:int=42)
     indices = torch.randperm(train_total_count, generator=generator).tolist()
     train_size = train_total_count - val_size
 
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:]
-    train_paths = [train_img_paths[i] for i in train_indices]
-    val_paths = [train_img_paths[i] for i in val_indices]
-    test_paths = test_img_paths
+    train_indices= indices[:train_size]
+    val_indices= indices[train_size:]
+    train_paths= [train_img_paths[i] for i in train_indices]
+    val_paths =[train_img_paths[i] for i in val_indices]
+    test_paths=test_img_paths
 
-    val_label_dir = yolo_dataset_dir / "labels" / "val"
+    val_label_dir=yolo_dataset_dir / "labels" / "val"
     val_label_dir.mkdir(parents=True, exist_ok=True)
     for img_path in val_paths:
-        stem = Path(img_path).stem
-        src = train_label_dir / f"{stem}.txt"
-        dst = val_label_dir / f"{stem}.txt"
+        stem=Path(img_path).stem
+        src=train_label_dir/f"{stem}.txt"
+        dst=val_label_dir/f"{stem}.txt"
         if src.exists():
             shutil.copy(src, dst)
 
-    return build_dataset_yaml(yolo_dataset_dir=yolo_dataset_dir,train_img_paths=train_paths,val_img_paths=val_paths,test_img_paths=test_paths,class_names=MAIN_CLASSES)
+    copy_images_to_dataset(yolo_dataset_dir, train_paths, val_paths, test_paths)
+
+    # We must update the paths to point to the NEW locations in the yolo_fashionpedia folder
+    final_train_paths=[str(yolo_dataset_dir/"images"/"train"/Path(p).name) for p in train_paths]
+    final_val_paths=[str(yolo_dataset_dir/"images"/"val"/Path(p).name) for p in val_paths]
+    final_test_paths=[str(yolo_dataset_dir/"images"/"test"/Path(p).name) for p in test_paths]
+
+    return build_dataset_yaml(yolo_dataset_dir=yolo_dataset_dir,train_img_paths=final_train_paths,val_img_paths=final_val_paths,test_img_paths=final_test_paths,class_names=MAIN_CLASSES)
 
 
 
@@ -378,7 +399,7 @@ def main():
     class_ids_to_keep=list(range(NUM_CLASSES))                           
 
     #One run: default
-    SINGLE_RUN = dict(yolo_version ="yolo11",model_size="s",img_size=384,epochs=100,batch_size=16,lr0=0.01,lrf=0.01,weight_decay=5e-4,momentum=0.937,warmup_epochs=3,patience=15,
+    SINGLE_RUN = dict(yolo_version ="yolo11",model_size="s",img_size=384,epochs=50,batch_size=16,lr0=0.01,lrf=0.01,weight_decay=5e-4,momentum=0.937,warmup_epochs=3,patience=15,
         #others
         pretrained=True,device="auto",seed=42)
 
@@ -386,11 +407,10 @@ def main():
     # Set DO_GRID_SEARCH = True to run all combinations below.
     DO_GRID_SEARCH=False
     
-    GRID={"model_size":["s","m"],"img_size":[384, 192],"lr0":[1e-2, 1e-3]}
-    # GRID_2 = {"model_size":["s", "m"],"img_size":[384, 640],"lr0":[1e-2, 1e-3],"weight_decay":[1e-4, 5e-4, 1e-3]}
+    GRID={"model_size":["s","m"],"img_size":[384, 192],"lr0":[1e-3]}
 
     # params that are fixed during grid search (everything not in GRID)
-    FIXED_PARAMS=dict(yolo_version="yolo11",epochs=20,batch_size=8,lrf=0.01,weight_decay=5e-4,momentum=0.937,warmup_epochs=3,patience=15,pretrained=True,device="auto",seed=42)
+    FIXED_PARAMS=dict(yolo_version="yolo11",epochs=50,batch_size=8,lrf=0.01,weight_decay=5e-4,momentum=0.937,warmup_epochs=3,patience=15,pretrained=True,device="auto",seed=42)
     yaml_path=prepare_data(yolo_dataset_dir, class_ids_to_keep)
 
     output_dir=Path(config.RESULTS)/"yolo_runs"
