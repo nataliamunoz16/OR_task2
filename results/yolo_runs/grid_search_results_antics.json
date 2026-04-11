@@ -1,0 +1,42 @@
+[
+    {
+        "run_name": "yolo11s_img384_ep50_bs8_lr0.01_wd0.0005_",
+        "yolo_version": "yolo11",
+        "model_size": "s",
+        "img_size": 384,
+        "epochs": 50,
+        "batch_size": 8,
+        "lr0": 0.01,
+        "lrf": 0.01,
+        "weight_decay": 0.0005,
+        "momentum": 0.937,
+        "warmup_epochs": 3,
+        "patience": 15,
+        "pretrained": true,
+        "train_time_s": 20238.9,
+        "mDice_no_bg": 0.567,
+        "accuracy": 0.9512,
+        "mIoU": 0.443,
+        "mDice": 0.5818
+    },
+    {
+        "run_name": "yolo11s_img384_ep50_bs8_lr0.001_wd0.0005_",
+        "yolo_version": "yolo11",
+        "model_size": "s",
+        "img_size": 384,
+        "epochs": 50,
+        "batch_size": 8,
+        "lr0": 0.001,
+        "lrf": 0.01,
+        "weight_decay": 0.0005,
+        "momentum": 0.937,
+        "warmup_epochs": 3,
+        "patience": 15,
+        "pretrained": true,
+        "train_time_s": 19677.6,
+        "mDice_no_bg": 0.567,
+        "accuracy": 0.9512,
+        "mIoU": 0.443,
+        "mDice": 0.5818
+    }
+]

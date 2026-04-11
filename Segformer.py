@@ -3,7 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from timm.models.layers import drop_path, trunc_normal_
-import segmentation_models_pytorch as smp
+
+"""
+Extracted from: https://colab.research.google.com/gist/Jeremy26/13f71c273f0a1a93f758d02b2b77802e/segformer-cityscapes-run.ipynb?authuser=0#scrollTo=ae77a0b4
+"""
 
 class overlap_patch_embed(nn.Module):
     def __init__(self, patch_size, stride, in_chans, embed_dim):

@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import OneCycleLR
 from dataset import FashionDataset, FashionDatasetCropped
 import config
 from torch.utils.data import random_split
@@ -12,14 +11,11 @@ import torchvision.transforms as T
 from Segformer import segformer_mit_b3
 from deeplabv3plus import deeplabv3plus
 from unet import unet
-from utils import (get_dataloaders, train_validate_model, evaluate_model, meanIoU, visualize_predictions)
+from utils import (get_dataloaders, train_validate_model, evaluate_model, visualize_predictions)
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import matplotlib.pyplot as plt
 import random
 import time
-import torchvision
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 import segmentation_models_pytorch as smp
 from overrepresented_classes import overrepresented
 
@@ -250,9 +246,6 @@ def main():
     metrics_json_path = os.path.join(config.RESULTS, f"{model_file}_test_metrics.json")
     with open(metrics_json_path, "w") as f:
         json.dump(results, f, indent=4)
-
-
-    #id_to_color = np.array([[i,i,i] for i in range(28)], dtype=np.uint8)
     id_to_color = get_id_to_color()
     num_test_samples = 10
     _, axes = plt.subplots(num_test_samples, 3, figsize=(3*6, num_test_samples * 4))
