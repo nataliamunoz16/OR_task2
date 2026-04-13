@@ -138,3 +138,86 @@ class FashionDatasetCropped(Dataset):
         if self.originals:
             return image_orig, mask_orig, image, mask
         return image, mask
+
+def boxes_to_heatmaps(boxes, image_shape, selected_class):
+    h,w=image_shape
+    heatmap=np.zeros((h,w), dtype=np.float32)
+    for box in boxes:
+        conf=box["confidence"]
+        if box["class_id"] not in selected_class:
+            continue
+        x1, y1, x2, y2 =box["bbox"]
+        x1=max(0, min(w-1, int(x1)))
+        x2=max(0, min(w-1, int(x2)))
+        y1=max(0, min(h-1, int(y1)))
+        y2=max(0, min(h-1, int(y2)))
+        intensity = conf*255
+        heatmap[y1:y2, x1:x2]=intensity
+    return heatmap.astype(np.uint8)
+
+class FashionDatasetWithBoxes(Dataset):
+    def __init__(self, img_dir, mask_dir, boxes_json_path, target_height=768, target_width=512, transform=None, originals=False, selected_classes=[]):
+        self.img_dir = img_dir
+        self.mask_dir = mask_dir
+        self.transform = transform
+        self.target_height = target_height
+        self.target_width = target_width
+        with open(boxes_json_path, "r") as f:
+            self.boxes_dict = json.load(f)
+        mask_basenames = [basename.split("_")[0] for basename in os.listdir(mask_dir)]
+        basenames = [base.split(".")[0] for base in os.listdir(img_dir) if base.split(".")[0] in mask_basenames]
+        name_img_files = [basename +'.jpg' for basename in basenames]
+        mask_img_files = [basename +'_seg.png' for basename in basenames]
+        self.img_files = sorted(name_img_files)
+        self.mask_files = sorted(mask_img_files)
+        self.originals = originals
+        self.selected_classses=selected_classes
+
+    def __len__(self):
+        return len(self.img_files)
+
+    def __getitem__(self, idx):
+        img_filename=self.img_files[idx]
+        img_path = os.path.join(self.img_dir, img_filename)
+        mask_path = os.path.join(self.mask_dir, self.mask_files[idx])
+        image_orig = Image.open(img_path).convert('RGB')
+        mask_orig = Image.open(mask_path)
+
+        w, h = image_orig.size
+        boxes = self.boxes_dict.get(img_filename, [])
+        boxes_map_orig = boxes_to_heatmaps(boxes, image_shape=(h, w), selected_class=self.selected_classses)
+        boxes_map_orig = Image.fromarray(boxes_map_orig, mode="L")
+
+        scale = min(self.target_width/w, self.target_height/h) #keep aspect ratio
+        new_w = int(w*scale)
+        new_h = int(h*scale)
+
+        #resize keeping aspect ratio
+        image =image_orig.resize((new_w, new_h), Image.BILINEAR)
+        mask =mask_orig.resize((new_w, new_h), Image.NEAREST)
+        boxes_map =boxes_map_orig.resize((new_w, new_h), Image.NEAREST)
+        #create empty images
+        padded_image =Image.new("RGB", (self.target_width, self.target_height), (0, 0, 0))
+        padded_mask =Image.new("L", (self.target_width, self.target_height), 0)
+        padded_boxes =Image.new("L", (self.target_width, self.target_height), 0)
+        #center position
+        x_offset =(self.target_width - new_w)//2
+        y_offset =(self.target_height - new_h)//2
+        padded_image.paste(image,(x_offset, y_offset))
+        padded_mask.paste(mask,(x_offset, y_offset))
+        padded_boxes.paste(boxes_map, (x_offset, y_offset))
+        
+        mask = np.array(padded_mask)
+        if mask.ndim == 3:
+            mask = mask[:,:,0]
+
+        if self.transform:
+            image = self.transform(padded_image)
+        else:
+            image = T.ToTensor()(padded_image)
+        boxes_tensor=T.ToTensor()(padded_boxes)
+        image=torch.cat([image, boxes_tensor], dim=0)
+        mask = torch.as_tensor(mask, dtype=torch.long)
+        if self.originals:
+            return image_orig, mask_orig, image, mask
+        return image, mask

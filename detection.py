@@ -238,24 +238,30 @@ def predict_bb(model_path, image_dir, output_json, conf, device):
         else:
             device = "cpu"
     model=YOLO(str(model_path))
+    print('hola')
     image_paths=os.listdir(image_dir)
     image_paths = [image_dir / name for name in image_paths]
     image_paths = sorted(image_paths)
     results={}
-    res=model.predict(source=[str(p) for p in image_paths], conf=conf, device=device, verbose=True)
-    for img_path, result in zip(image_paths, res):
-        boxes=[]
-        if result.boxes is not None and len(result.boxes)>0:
-            xyxy=result.boxes.xyxy.cpu().numpy()
-            confs=result.boxes.conf.cpu().numpy()
-            classes=result.boxes.cls.cpu().numpy().astype(int)
-            for box, score, idclass in zip(xyxy, confs, classes):
-                x1,y1,x2,y2=box.tolist()
-                boxes.append({"class_id":int(idclass), "confidence":float(score), "bbox": [float(x1), float(y1), float(x2), float(y2)]})
-        results[img_path.name]=boxes
+    batch_size=64
+    for i in range(0, len(image_paths), batch_size):
+        batch=image_paths[i:i+batch_size]
+        res=model.predict(source=[str(p) for p in batch], conf=conf, device=device, verbose=True)
+        for img_path, result in zip(batch, res):
+            boxes=[]
+            if result.boxes is not None and len(result.boxes)>0:
+                xyxy=result.boxes.xyxy.cpu().numpy()
+                confs=result.boxes.conf.cpu().numpy()
+                classes=result.boxes.cls.cpu().numpy().astype(int)
+                for box, score, idclass in zip(xyxy, confs, classes):
+                    x1,y1,x2,y2=box.tolist()
+                    boxes.append({"class_id":int(idclass), "confidence":float(score), "bbox": [float(x1), float(y1), float(x2), float(y2)]})
+            results[img_path.name]=boxes
     with open(output_json, "w") as f:
         json.dump(results, f, indent=4)
     return results
+
+
             
 
 def main():
@@ -264,14 +270,17 @@ def main():
 
     SINGLE_RUN = dict(yolo_version ="yolo11",model_size="s",img_size=384,epochs=20,batch_size=8,lr0=1e-3,lrf=0.01,weight_decay=5e-4,momentum=0.937,warmup_epochs=3,patience=15,pretrained=True,device="auto",seed=42)
 
-    yaml_path=prepare_data(yolo_dataset_dir,class_ids_to_keep)
+    #yaml_path=prepare_data(yolo_dataset_dir,class_ids_to_keep)
 
-    output_dir=Path(config.RESULTS) / "yolo_runs"
+    output_dir=Path(config.RESULTS) / "yolo_runs_detection"
     output_dir.mkdir(parents=True, exist_ok=True)
-    summary=train_yolo(yaml_path=yaml_path, output_dir=output_dir, **SINGLE_RUN)
+    #summary=train_yolo(yaml_path=yaml_path, output_dir=output_dir, **SINGLE_RUN)
+    summary = {"run_name": "yolo11s_img384_ep20_bs8_lr0.001_wd0.0005_"}
     best_model_path=output_dir / summary["run_name"] / "weights" / "best.pt"
-    out_dir = output_dir / summary["run_name"] / "predicted_bb.json"
-    predict_bb(model_path=best_model_path, image_dir=Path(config.TEST_IMG), output_json=out_dir, conf=0.25, device="auto")
+    out_dir = output_dir / summary["run_name"] / "predicted_bb_train_val.json"
+    predict_bb(model_path=best_model_path, image_dir=Path(config.TRAIN_IMG), output_json=out_dir, conf=0.25, device="cpu")
+    out_dir = output_dir / summary["run_name"] / "predicted_bb_test.json"
+    predict_bb(model_path=best_model_path, image_dir=Path(config.TEST_IMG), output_json=out_dir, conf=0.25, device="cpu")
 
 if __name__ == "__main__":
     main()
