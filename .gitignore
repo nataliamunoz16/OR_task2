@@ -29,3 +29,5 @@ yolo_fashionpedia/images/
 *.deb
 
 instances_attributes_train2020.json
+instances_attributes_val2020.json
+info_test2020.json
