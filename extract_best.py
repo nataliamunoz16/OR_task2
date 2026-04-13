@@ -1,3 +1,4 @@
+# Scans validation metric JSONs and extracts the epoch with the highest mean Dice score.
 import os
 import json
 import glob

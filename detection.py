@@ -1,3 +1,4 @@
+# Prepares YOLO detection datasets and trains/predicts bounding boxes for Fashionpedia images.
 import os
 import sys
 import json

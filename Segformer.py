@@ -1,3 +1,4 @@
+# Implements a SegFormer-style transformer encoder and segmentation head for semantic segmentation.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

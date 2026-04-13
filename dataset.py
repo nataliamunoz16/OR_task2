@@ -1,3 +1,4 @@
+# Dataset classes for Fashionpedia-style image/mask loading, cropping and box heatmap augmentation.
 import os
 import json
 from torch.utils.data import Dataset

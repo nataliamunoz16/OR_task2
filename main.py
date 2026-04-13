@@ -1,3 +1,4 @@
+# Trains and evaluates Fashionpedia semantic segmentation models with optional fine-tuning and augmentation.
 import os
 import json
 import numpy as np

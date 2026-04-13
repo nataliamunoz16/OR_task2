@@ -1,3 +1,4 @@
+# Helper script for YOLO-based Fashionpedia object detection dataset preparation and inference.
 import os
 import sys
 import json
@@ -187,15 +188,15 @@ def compute_pixel_metrics(model: YOLO, img_paths: list[str],label_dir: Path, img
     fg = slice(1, None)
 
     return {
-        "mIoU":               float(iou_per_class.mean()),
-        "mDice":              float(dice_per_class.mean()),
-        "mDice_no_bg":        float(dice_per_class[fg].mean()),
-        "accuracy":           float(accuracy),
-        "mean_acc":           float(acc_per_class.mean()),
-        "mean_acc_no_bg":     float(acc_per_class[fg].mean()),
-        "dice_per_class":     dice_per_class[fg].tolist(),
-        "accuracy_per_class": acc_per_class[fg].tolist(),
-        "iou_per_class":      iou_per_class[fg].tolist(),
+        "mIoU":float(iou_per_class.mean()),
+        "mDice":float(dice_per_class.mean()),
+        "mDice_no_bg":float(dice_per_class[fg].mean()),
+        "accuracy":float(accuracy),
+        "mean_acc":float(acc_per_class.mean()),
+        "mean_acc_no_bg":float(acc_per_class[fg].mean()),
+        "dice_per_class":dice_per_class[fg].tolist(),
+        "accuracy_per_class":acc_per_class[fg].tolist(),
+        "iou_per_class":iou_per_class[fg].tolist(),
     }
 
 def train_yolo(yaml_path:Path,

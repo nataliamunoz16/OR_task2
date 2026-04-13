@@ -1,3 +1,4 @@
+# Generates augmented Fashionpedia training pairs using geometric, color, fabric and mixup transforms.
 import os
 import config
 import cv2

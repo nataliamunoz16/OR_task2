@@ -1,3 +1,4 @@
+# Trains a 4-channel DeepLabV3+ segmentation model using image data plus bounding-box heatmap features.
 import os
 import json
 import numpy as np

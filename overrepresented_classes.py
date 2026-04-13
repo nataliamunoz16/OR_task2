@@ -1,3 +1,4 @@
+# Identifies overrepresented Fashionpedia classes and computes class distribution statistics from validation metrics.
 import os
 import numpy
 import config

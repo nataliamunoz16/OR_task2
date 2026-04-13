@@ -1,3 +1,4 @@
+# Computes and visualizes category spatial density maps from Fashionpedia annotation data.
 import json
 import numpy as np
 import matplotlib.pyplot as plt

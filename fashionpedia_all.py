@@ -1,3 +1,4 @@
+# Converts COCO-style Fashionpedia annotations into per-image segmentation mask PNG files.
 import sys
 import numpy as np
 import cv2

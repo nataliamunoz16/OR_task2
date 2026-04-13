@@ -1,3 +1,4 @@
+# Defines a simple U-Net segmentation backbone using segmentation-models-pytorch.
 import segmentation_models_pytorch as smp
 
 def unet(num_classes, pretrained):

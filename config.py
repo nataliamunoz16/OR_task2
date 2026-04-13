@@ -1,3 +1,4 @@
+# Configuration of Fashionpedia dataset paths and output directories.
 from pathlib import Path
 
 ROOT = Path("/home/natalia/Escritorio/MAI/OR")
